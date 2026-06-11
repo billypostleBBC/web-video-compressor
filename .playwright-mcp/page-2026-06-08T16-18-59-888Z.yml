@@ -1,0 +1,19 @@
+- main [ref=e2]:
+  - generic "Compression workflow" [ref=e3]:
+    - generic [ref=e4]:
+      - button "Source No files selected" [expanded] [ref=e5] [cursor=pointer]:
+        - generic [ref=e6]: Source
+        - generic [ref=e7]: No files selected
+      - generic "Drop video files or a folder" [ref=e10]:
+        - paragraph [ref=e11]: Drag and drop your files anywhere in this area
+        - paragraph [ref=e12]: or click the button below to use Finder
+        - generic [ref=e13]:
+          - button "Choose file" [ref=e14] [cursor=pointer]
+          - button "Reset" [disabled] [ref=e15]
+        - generic [ref=e16]: No source selected
+    - button "Compression Medium" [ref=e19] [cursor=pointer]:
+      - generic [ref=e20]: Compression
+      - generic [ref=e21]: Medium
+    - button "Output 0 outputs" [ref=e24] [cursor=pointer]:
+      - generic [ref=e25]: Output
+      - generic [ref=e26]: 0 outputs

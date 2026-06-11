@@ -1,0 +1,21 @@
+{
+  "name": "web-video-compressor",
+  "version": "0.1.0",
+  "description": "Local-only Electron wrapper for ffmpeg web video exports.",
+  "productName": "Web Video Compressor",
+  "main": "src/main.js",
+  "type": "commonjs",
+  "scripts": {
+    "package:mac": "node scripts/package-mac.js",
+    "package:mac:internal": "node scripts/package-mac.js --internal",
+    "package:mac:release": "node scripts/package-mac.js --release",
+    "start": "electron .",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "electron": "^41.7.0"
+  },
+  "dependencies": {
+    "ffmpeg-static": "^5.3.0"
+  }
+}
