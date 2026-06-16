@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "Allow the main compressor window to use the Tauri APIs required for local file selection, drag and drop, and completion notifications.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-size",
+    "dialog:allow-open",
+    "notification:default"
+  ]
+}

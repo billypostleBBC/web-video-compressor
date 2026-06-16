@@ -1,3 +1,8 @@
 node_modules/
 dist/
 .DS_Store
+*.app
+src-tauri/target/
+src-tauri/resources/
+src-tauri/gen/
+.playwright-mcp/

@@ -4,26 +4,28 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Web Video Compressor</title>
-    <link rel="stylesheet" href="./styles.css?v=source-gap-border-1" />
+    <link rel="stylesheet" href="./styles.css?v=no-titlebar-shell-1" />
   </head>
   <body>
+    <div class="window-drag-region" data-tauri-drag-region aria-hidden="true"></div>
+    <div class="app-title" data-tauri-drag-region>Web Video Compressor</div>
     <main class="app-shell">
       <div id="toolStatus" class="tool-alert" role="alert" hidden></div>
 
       <div class="accordion" aria-label="Compression workflow">
-        <section class="accordion-section" data-section="source">
+        <section class="accordion-section accordion-section--open accordion-section--chevron-open" data-section="source">
           <button
             id="sourceToggle"
             class="accordion-toggle"
             type="button"
-            aria-expanded="false"
+            aria-expanded="true"
             aria-controls="sourcePanel"
           >
             <span class="accordion-title">Source</span>
-            <span id="sourceSubtitle" class="accordion-subtitle"></span>
+            <span id="sourceSubtitle" class="accordion-subtitle">No files selected</span>
             <span class="accordion-chevron" aria-hidden="true"></span>
           </button>
-          <div id="sourcePanel" class="accordion-panel" hidden>
+          <div id="sourcePanel" class="accordion-panel">
             <div id="dropZone" class="source-drop" aria-label="Drop video files or a folder">
               <p class="source-drop__heading">Drag and drop your files anywhere in this area</p>
               <p class="source-drop__copy">or click the button below to use Finder</p>
@@ -57,7 +59,7 @@
                 <span class="quality-tick--active">Medium</span>
                 <span>High</span>
               </div>
-            <input id="qualitySlider" type="range" min="0" max="2" step="1" value="1" />
+              <input id="qualitySlider" type="range" min="0" max="2" step="1" value="1" />
               <p id="qualityDescription" class="quality-description">Default, for balanced quality and size</p>
             </div>
             <span id="qualityLabel" class="sr-only">Medium</span>
@@ -83,6 +85,7 @@
                 <p class="muted">No outputs queued.</p>
               </div>
               <div id="runActions" class="button-row output-actions">
+                <button id="outputRestartButton" type="button" hidden disabled>Restart</button>
                 <button id="outputActionButton" type="button" disabled>Start compression</button>
               </div>
             </div>
@@ -91,6 +94,7 @@
       </div>
     </main>
 
-    <script src="./renderer.js?v=source-gap-border-1"></script>
+    <script src="./tauri-adapter.js?v=tauri-adapter-1"></script>
+    <script src="./renderer.js?v=no-titlebar-shell-1"></script>
   </body>
 </html>

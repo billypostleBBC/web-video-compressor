@@ -1,11 +1,12 @@
 # Web Video Compressor
 
-Local-only Electron app for creating web video exports with bundled `ffmpeg`.
+Local-only Tauri app for creating web video exports with bundled `ffmpeg`.
 
 ## Requirements
 
 - macOS
 - Node.js 22+
+- Rust/Cargo for Tauri builds
 
 ## Run
 
@@ -14,78 +15,25 @@ npm install
 npm start
 ```
 
-## Create a Mac App
+## Create the Mac App
+
+Create the Apple Silicon handoff build:
 
 ```sh
 npm run package:mac
 ```
 
-The app is created at `dist/Web Video Compressor.app`. The packaged app includes `ffmpeg` in `Contents/Resources/bin`, so colleagues do not need Homebrew or admin access to use it.
+The app is created at `src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Web Video Compressor.app`. The packaged app includes bundled `ffmpeg`, so colleagues do not need Homebrew or admin access to use it.
 
-The default packaging script ad-hoc signs the finished `.app` after modifying the Electron bundle. This keeps the bundle internally valid for local testing if it is copied out of the repo folder, as long as the whole `.app` has fully synced first.
+The bundle is ad-hoc signed with signing identity `-`. This keeps the bundle internally valid for trusted local sharing, but it does not notarise the app and does not bypass managed macOS Gatekeeper policy.
 
-For Dropbox sharing, users should run the app from a fully synced Dropbox desktop folder or copy the fully synced `.app` with Finder. A 270-byte app in Finder is a Dropbox placeholder, not the real app. Downloading an ad-hoc signed app from Dropbox in a browser may add macOS quarantine and trigger Gatekeeper.
+For the intended small-scale handoff, share the raw `.app` only after it has fully built and fully synced locally. Users should copy/open it from a fully synced local Finder or Dropbox desktop folder. A 270-byte app in Finder is a Dropbox placeholder, not the real app. Downloading an ad-hoc signed app from Dropbox in a browser may add macOS quarantine and trigger Gatekeeper.
 
-## Create an Internal Sharing Bundle
-
-Use this for small-scale internal sharing where the app is not notarised:
+Verify the `.app` before sharing:
 
 ```sh
-npm run package:mac:internal
-```
-
-This creates:
-
-- `dist/Web Video Compressor.app`
-- `dist/Web Video Compressor-<version>-internal-mac.zip`
-- `dist/FIRST-RUN-INSTRUCTIONS.txt`
-
-Share the zip and the first-run note together. Do not share a partially synced `.app` bundle from Dropbox, because macOS app bundles are folders and can look present before every internal file has synced.
-
-The internal bundle is still ad-hoc signed. It is suitable only for trusted small internal groups where users can receive the tool from a known source. It does not bypass BBC-managed Gatekeeper restrictions if a user receives a quarantined copy.
-
-## Create a Signed and Notarized Release
-
-Use this for builds that are shared with other people:
-
-```sh
-npm run package:mac:release
-```
-
-Release packaging requires:
-
-- Apple Developer Program access.
-- Xcode command line tools.
-- A `Developer ID Application` certificate installed in Keychain on the build Mac.
-- Notarisation credentials stored in Keychain with `xcrun notarytool`.
-
-One-time setup:
-
-```sh
-xcrun notarytool store-credentials web-video-compressor \
-  --apple-id "you@example.com" \
-  --team-id "TEAMID" \
-  --password "xxxx-xxxx-xxxx-xxxx"
-```
-
-Use an app-specific password from your Apple ID account, not your normal Apple ID password.
-
-Then package with:
-
-```sh
-export MACOS_SIGN_IDENTITY="Developer ID Application: Your Name or Company (TEAMID)"
-export APPLE_NOTARY_PROFILE="web-video-compressor"
-npm run package:mac:release
-```
-
-The release script signs with hardened runtime, submits the app to Apple notarisation, staples the notarisation ticket to the `.app`, and creates `dist/Web Video Compressor-<version>-mac.zip` for distribution.
-
-Verify a release before sharing:
-
-```sh
-codesign --verify --deep --strict --verbose=2 "dist/Web Video Compressor.app"
-spctl --assess --type execute --verbose=4 "dist/Web Video Compressor.app"
-xcrun stapler validate "dist/Web Video Compressor.app"
+codesign --verify --deep --strict --verbose=2 "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Web Video Compressor.app"
+du -sh "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Web Video Compressor.app"
 ```
 
 ## What It Exports

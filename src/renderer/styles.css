@@ -15,9 +15,33 @@ body {
   margin: 0;
   min-width: 0;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 50% -20%, rgba(60, 64, 72, 0.32), transparent 36rem),
-    #101114;
+  overflow-x: hidden;
+  background: #101114;
+}
+
+.window-drag-region {
+  position: fixed;
+  z-index: 20;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 49px;
+  -webkit-app-region: drag;
+}
+
+.app-title {
+  position: fixed;
+  z-index: 21;
+  top: 18px;
+  right: 16px;
+  max-width: calc(100vw - 112px);
+  overflow: hidden;
+  color: #8f8f94;
+  font-size: 14px;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  -webkit-app-region: drag;
 }
 
 button,
@@ -93,9 +117,9 @@ p {
 }
 
 .app-shell {
-  width: min(474px, calc(100vw - 32px));
+  width: min(442px, calc(100vw - 32px));
   margin: 0 auto;
-  padding: 32px 0 40px;
+  padding: 49px 0 16px;
 }
 
 .muted {
@@ -118,11 +142,7 @@ p {
 .accordion {
   display: grid;
   gap: 16px;
-  border: 1px solid #343844;
-  border-radius: 14px;
-  padding: 16px;
-  background: #14161d;
-  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.38);
+  padding: 0;
 }
 
 .accordion-section {
@@ -136,9 +156,9 @@ p {
   display: grid;
   grid-template-columns: 1fr auto 18px;
   align-items: center;
-  gap: 18px;
+  gap: 14px;
   width: 100%;
-  min-height: 54px;
+  min-height: 55px;
   border: 0;
   border-radius: 0;
   padding: 0 16px;
@@ -171,8 +191,8 @@ p {
 }
 
 .accordion-chevron {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-right: 2px solid #f7f4ed;
   border-bottom: 2px solid #f7f4ed;
   transform: rotate(45deg) translateY(-3px);
@@ -210,7 +230,7 @@ p {
   min-height: 0;
   border: 2px dashed #454750;
   border-radius: 4px;
-  padding: 16px 32px;
+  padding: 17px 20px 16px;
   background: #111319;
   text-align: center;
   transition:
@@ -220,7 +240,7 @@ p {
 
 .source-drop.source-drop--dragging {
   border-color: #454750;
-  background: #173137;
+  background: #163037;
 }
 
 .source-drop__heading {
@@ -243,8 +263,8 @@ p {
 
 .source-selection {
   display: grid;
-  gap: 8px;
-  width: min(360px, 100%);
+  gap: 7px;
+  width: min(386px, 100%);
   color: #49c8df;
   font-size: 18px;
   font-weight: 900;
@@ -259,13 +279,13 @@ p {
 
 .source-drop--has-selection {
   gap: 14px;
-  padding-top: 24px;
-  padding-bottom: 24px;
+  padding-top: 17px;
+  padding-bottom: 16px;
 }
 
 .source-actions {
   justify-content: center;
-  gap: 22px;
+  gap: 10px;
 }
 
 .source-actions button {
@@ -298,6 +318,7 @@ p {
 .source-actions button.secondary {
   color: #ffffff;
   background: #17323a;
+  min-width: 120px;
 }
 
 .source-actions button.secondary:hover:not(:disabled) {
@@ -317,23 +338,23 @@ p {
 
 .compression-card {
   display: grid;
-  gap: 12px;
+  gap: 14px;
   border-radius: 4px;
-  padding: 28px 16px 32px;
+  padding: 24px 16px 22px;
   background: #101319;
 }
 
 #qualitySlider {
   --quality-percent: 50%;
   width: 100%;
-  height: 16px;
+  height: 14px;
   margin: 0;
   appearance: none;
   background: transparent;
 }
 
 #qualitySlider::-webkit-slider-runnable-track {
-  height: 5px;
+  height: 6px;
   border-radius: 999px;
   background:
     linear-gradient(#49c8df, #49c8df) 0 0 / var(--quality-percent) 100% no-repeat,
@@ -344,7 +365,7 @@ p {
   appearance: none;
   width: 12px;
   height: 12px;
-  margin-top: -3.5px;
+  margin-top: -3px;
   border: 0;
   border-radius: 999px;
   background: #49c8df;
@@ -387,7 +408,8 @@ p {
 
 .output-actions {
   justify-content: center;
-  margin-top: 18px;
+  gap: 14px;
+  margin-top: 7px;
 }
 
 .output-summary {
@@ -396,7 +418,7 @@ p {
 
 .output-card {
   display: grid;
-  gap: 18px;
+  gap: 19px;
   border-radius: 4px;
   padding: 32px 16px;
   background: #101319;
@@ -410,7 +432,7 @@ p {
 .queue-item {
   position: relative;
   display: block;
-  min-height: 24px;
+  min-height: 25px;
   overflow: hidden;
   border: 1px solid #8a8b90;
   border-radius: 999px;
@@ -435,7 +457,8 @@ p {
   color: #ffffff;
   font-size: 14px;
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1.2;
+  text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -517,28 +540,28 @@ p {
   }
 
   .accordion {
-    padding: 12px;
+    gap: 12px;
   }
 
   .accordion-toggle {
-    grid-template-columns: 1fr 18px;
-    gap: 12px;
-    min-height: 62px;
+    grid-template-columns: minmax(0, 1fr) auto 18px;
+    gap: 10px;
+    min-height: 55px;
   }
 
   .accordion-subtitle {
-    grid-column: 1;
-    grid-row: 2;
-    font-size: 0.84rem;
+    grid-column: auto;
+    grid-row: auto;
+    font-size: 16px;
   }
 
   .accordion-chevron {
-    grid-column: 2;
-    grid-row: 1 / span 2;
+    grid-column: auto;
+    grid-row: auto;
   }
 
   .quality-ticks {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .button-row:not(.source-actions):not(.output-actions),
@@ -546,12 +569,7 @@ p {
     width: 100%;
   }
 
-  .queue-item__heading {
-    display: grid;
-    gap: 8px;
-  }
-
-  .queue-status {
-    justify-self: start;
+  .source-drop {
+    padding-inline: 16px;
   }
 }

@@ -20,7 +20,13 @@ const exportDefinitions = [
 ];
 const chevronMotionMs = 360;
 const panelMotionMs = 260;
+const minimumJobProgressAnimationMs = 1000;
+const windowWidth = 474;
 const sectionTimers = new WeakMap();
+const completionTimers = new Map();
+let resizeWindowFrame = null;
+let resizeWindowTimer = null;
+let progressAnimationFrame = null;
 
 const state = {
   selection: null,
@@ -30,11 +36,13 @@ const state = {
   running: false,
   toolsOk: false,
   dragDepth: 0,
-  activeSection: null,
+  activeSection: "source",
   runState: "idle"
 };
 
 const elements = {
+  windowDragRegion: document.querySelector(".window-drag-region"),
+  appShell: document.querySelector(".app-shell"),
   toolStatus: document.querySelector("#toolStatus"),
   sections: Array.from(document.querySelectorAll(".accordion-section")),
   toggles: Array.from(document.querySelectorAll(".accordion-toggle")),
@@ -52,6 +60,7 @@ const elements = {
   qualityDescription: document.querySelector("#qualityDescription"),
   summaryText: document.querySelector("#summaryText"),
   runActions: document.querySelector("#runActions"),
+  outputRestartButton: document.querySelector("#outputRestartButton"),
   outputActionButton: document.querySelector("#outputActionButton"),
   queueList: document.querySelector("#queueList")
 };
@@ -72,6 +81,54 @@ function currentQualityKey() {
 
 function compressorApi() {
   return window.compressor || null;
+}
+
+function clearPendingWindowResize() {
+  if (resizeWindowFrame) {
+    window.cancelAnimationFrame(resizeWindowFrame);
+    resizeWindowFrame = null;
+  }
+
+  if (resizeWindowTimer) {
+    window.clearTimeout(resizeWindowTimer);
+    resizeWindowTimer = null;
+  }
+}
+
+function scheduleWindowResize({ delay = 0 } = {}) {
+  const api = compressorApi();
+  if (!api || !api.resizeWindowToContent) {
+    return;
+  }
+
+  clearPendingWindowResize();
+
+  if (delay > 0) {
+    resizeWindowTimer = window.setTimeout(() => {
+      resizeWindowTimer = null;
+      scheduleWindowResize();
+    }, delay);
+    return;
+  }
+
+  resizeWindowFrame = window.requestAnimationFrame(() => {
+    resizeWindowFrame = null;
+    resizeWindowToContent();
+  });
+}
+
+function resizeWindowToContent() {
+  const api = compressorApi();
+  if (!api || !api.resizeWindowToContent || !elements.appShell) {
+    return;
+  }
+
+  const height = Math.ceil(elements.appShell.getBoundingClientRect().height);
+  api.resizeWindowToContent({ width: windowWidth, height }).catch(() => {});
+}
+
+function scheduleSettledWindowResize() {
+  scheduleWindowResize({ delay: panelMotionMs + 40 });
 }
 
 function outputCount() {
@@ -95,7 +152,11 @@ function createOutputRows(videos) {
       jobLabel: exportDefinition.jobLabel,
       label: outputFileName(video, exportDefinition.suffix),
       status: "waiting",
-      progress: 0
+      progress: 0,
+      startedAt: null,
+      completingFrom: null,
+      completingStartedAt: null,
+      completingDurationMs: null
     }))
   );
 }
@@ -143,6 +204,7 @@ function openSection(sectionName) {
             }
           }
           section.classList.add("accordion-section--open");
+          scheduleSettledWindowResize();
         }
       }, chevronMotionMs);
       updateSubtitles();
@@ -178,6 +240,7 @@ function setToolStatus(result) {
   state.toolsOk = Boolean(result.ok);
   elements.toolStatus.hidden = result.ok;
   elements.toolStatus.textContent = result.ok ? "" : result.message;
+  scheduleWindowResize();
 
   if (!result.ok) {
     elements.summaryText.textContent = result.message;
@@ -186,6 +249,7 @@ function setToolStatus(result) {
 
 function renderQueue() {
   elements.queueList.innerHTML = "";
+  const now = window.performance.now();
 
   if (state.outputRows.length === 0) {
     const empty = document.createElement("p");
@@ -195,6 +259,7 @@ function renderQueue() {
       : "No outputs queued.";
     elements.queueList.append(empty);
     updateSubtitles();
+    scheduleWindowResize();
     return;
   }
 
@@ -221,10 +286,10 @@ function renderQueue() {
     progressTrack.setAttribute("role", "progressbar");
     progressTrack.setAttribute("aria-valuemin", "0");
     progressTrack.setAttribute("aria-valuemax", "100");
-    progressTrack.setAttribute("aria-valuenow", String(Math.round(row.progress * 100)));
+    progressTrack.setAttribute("aria-valuenow", String(Math.round(displayedProgress(row, now) * 100)));
 
     const progressBar = document.createElement("span");
-    progressBar.style.width = `${Math.round(row.progress * 100)}%`;
+    progressBar.style.width = `${Math.round(displayedProgress(row, now) * 100)}%`;
 
     titleWrap.append(name);
     heading.append(titleWrap, status);
@@ -234,6 +299,77 @@ function renderQueue() {
   }
 
   updateSubtitles();
+  scheduleWindowResize();
+  scheduleProgressAnimation();
+}
+
+function displayedProgress(row, now = window.performance.now()) {
+  if (row.status === "done") {
+    return 1;
+  }
+
+  if (row.status !== "active" || !row.startedAt) {
+    return Math.max(0, Math.min(1, row.progress));
+  }
+
+  if (row.progress >= 1 && row.completingStartedAt !== null) {
+    const completionProgress = Math.min(
+      1,
+      (now - row.completingStartedAt) / row.completingDurationMs
+    );
+    return row.completingFrom + ((1 - row.completingFrom) * completionProgress);
+  }
+
+  return Math.max(0, Math.min(1, row.progress));
+}
+
+function scheduleProgressAnimation() {
+  if (progressAnimationFrame || !state.outputRows.some((row) => row.status === "active")) {
+    return;
+  }
+
+  progressAnimationFrame = window.requestAnimationFrame(updateRenderedProgressBars);
+}
+
+function updateRenderedProgressBars() {
+  progressAnimationFrame = null;
+  const now = window.performance.now();
+  let hasActiveRow = false;
+
+  for (const row of state.outputRows) {
+    if (row.status !== "active") {
+      continue;
+    }
+
+    hasActiveRow = true;
+    const progress = displayedProgress(row, now);
+    const item = Array.from(elements.queueList.children)
+      .find((child) => child.dataset.rowId === row.id);
+    const progressTrack = item ? item.querySelector(".queue-progress") : null;
+    const progressBar = progressTrack ? progressTrack.querySelector("span") : null;
+
+    if (progressTrack && progressBar) {
+      progressTrack.setAttribute("aria-valuenow", String(Math.round(progress * 100)));
+      progressBar.style.width = `${Math.round(progress * 100)}%`;
+    }
+  }
+
+  if (hasActiveRow) {
+    scheduleProgressAnimation();
+  }
+}
+
+function clearCompletionTimers() {
+  for (const timer of completionTimers.values()) {
+    window.clearTimeout(timer);
+  }
+  completionTimers.clear();
+}
+
+function clearRowCompletion(row) {
+  row.completingFrom = null;
+  row.completingStartedAt = null;
+  row.completingDurationMs = null;
 }
 
 function selectedSourceLabels() {
@@ -263,6 +399,8 @@ function renderSourceSelection() {
     item.textContent = label;
     elements.sourceSelection.append(item);
   }
+
+  scheduleWindowResize();
 }
 
 function statusLabel(status) {
@@ -294,10 +432,13 @@ function updateControls() {
     && !isCancelled
     && !isFinished;
   const actionState = outputActionState();
+  const showRestartButton = isCancelled;
 
   elements.outputActionButton.textContent = actionState.label;
   elements.outputActionButton.disabled = actionState.disabled || (!canStart && actionState.kind === "start");
   elements.outputActionButton.classList.toggle("secondary", actionState.kind === "stop" || actionState.kind === "resume");
+  elements.outputRestartButton.hidden = !showRestartButton;
+  elements.outputRestartButton.disabled = !showRestartButton || state.running || state.outputRows.length === 0;
   elements.selectFileButton.disabled = state.running;
   elements.resetButton.disabled = state.running || !state.selection;
   elements.resetButton.hidden = !state.selection;
@@ -362,6 +503,7 @@ function updateQualityText() {
 }
 
 function resetSelection() {
+  clearCompletionTimers();
   state.selection = null;
   state.videos = [];
   state.outputDir = null;
@@ -390,6 +532,7 @@ async function loadSelection(selection) {
   }
 
   state.selection = selection;
+  clearCompletionTimers();
   const preview = await api.previewInputs(selection);
   state.videos = preview.videos;
   state.outputDir = preview.outputDir;
@@ -418,20 +561,49 @@ function canAcceptDrop(event) {
   return Boolean(
     compressorApi()
       && !state.running
-      && event.dataTransfer
-      && event.dataTransfer.types
-      && Array.from(event.dataTransfer.types).includes("Files")
+      && (!event
+        || (event.dataTransfer
+          && event.dataTransfer.types
+          && Array.from(event.dataTransfer.types).includes("Files")))
   );
 }
 
-async function loadDroppedItems(event) {
+function isPositionInDropZone(position) {
+  if (!position || typeof position.x !== "number" || typeof position.y !== "number") {
+    return true;
+  }
+
+  const rect = elements.dropZone.getBoundingClientRect();
+  const candidates = [
+    position,
+    {
+      x: position.x / window.devicePixelRatio,
+      y: position.y / window.devicePixelRatio
+    }
+  ];
+
+  return candidates.some((candidate) =>
+    candidate.x >= rect.left
+      && candidate.x <= rect.right
+      && candidate.y >= rect.top
+      && candidate.y <= rect.bottom
+  );
+}
+
+async function loadDroppedPaths(paths) {
   const api = compressorApi();
   if (!api) {
     return;
   }
 
-  const paths = api.droppedPathsFromFiles(event.dataTransfer.files);
-  const result = await api.selectionFromDroppedPaths(paths);
+  let result;
+  try {
+    result = await api.selectionFromDroppedPaths(paths);
+  } catch (error) {
+    elements.summaryText.textContent = `Dropped files could not be read. ${error.message}`;
+    openSection("output");
+    return;
+  }
 
   if (!result.ok) {
     elements.summaryText.textContent = result.message;
@@ -440,6 +612,15 @@ async function loadDroppedItems(event) {
   }
 
   await loadSelection(result.selection);
+}
+
+async function loadDroppedItems(event) {
+  const api = compressorApi();
+  if (!api) {
+    return;
+  }
+
+  await loadDroppedPaths(api.droppedPathsFromFiles(event.dataTransfer.files));
 }
 
 function findOutputRow(event) {
@@ -462,19 +643,25 @@ function updateOutputRow(event, updates) {
 }
 
 function markIncompleteRows(status) {
+  clearCompletionTimers();
   for (const row of state.outputRows) {
     if (row.status !== "done") {
       row.status = status;
       row.progress = status === "waiting" ? 0 : row.progress;
+      row.startedAt = null;
+      clearRowCompletion(row);
     }
   }
   renderQueue();
 }
 
 function resetOutputRows() {
+  clearCompletionTimers();
   for (const row of state.outputRows) {
     row.status = "waiting";
     row.progress = 0;
+    row.startedAt = null;
+    clearRowCompletion(row);
   }
   state.runState = "idle";
   elements.summaryText.textContent = `${state.outputRows.length} outputs queued from ${state.videos.length} source file${state.videos.length === 1 ? "" : "s"}.`;
@@ -485,26 +672,46 @@ function resetOutputRows() {
 function handleEncoderEvent(event) {
   if (event.type === "run-started") {
     state.runState = "running";
+    clearCompletionTimers();
     for (const row of state.outputRows) {
       row.status = "waiting";
       row.progress = 0;
+      row.startedAt = null;
+      clearRowCompletion(row);
     }
     elements.summaryText.textContent = `Writing exports to ${event.outputDir}`;
     renderQueue();
   }
 
   if (event.type === "job-started") {
+    const row = findOutputRow(event);
+    if (row) {
+      const existingTimer = completionTimers.get(row.id);
+      if (existingTimer) {
+        window.clearTimeout(existingTimer);
+        completionTimers.delete(row.id);
+      }
+    }
+
     updateOutputRow(event, {
       status: "active",
-      progress: 0.08
+      progress: 0,
+      startedAt: window.performance.now(),
+      completingFrom: null,
+      completingStartedAt: null,
+      completingDurationMs: null
+    });
+  }
+
+  if (event.type === "job-progress" && typeof event.progress === "number") {
+    updateOutputRow(event, {
+      status: "active",
+      progress: Math.max(0, Math.min(0.99, event.progress))
     });
   }
 
   if (event.type === "job-finished") {
-    updateOutputRow(event, {
-      status: "done",
-      progress: 1
-    });
+    finishOutputRow(event);
   }
 
   if (event.type === "file-finished") {
@@ -526,6 +733,52 @@ function handleEncoderEvent(event) {
     updateControls();
     openSection("output");
   }
+}
+
+function finishOutputRow(event) {
+  const row = findOutputRow(event);
+  if (!row) {
+    return;
+  }
+
+  const startedAt = row.startedAt || window.performance.now();
+  const remainingMs = Math.max(
+    0,
+    minimumJobProgressAnimationMs - (window.performance.now() - startedAt)
+  );
+
+  if (remainingMs === 0) {
+    row.progress = 1;
+    row.status = "done";
+    row.startedAt = null;
+    clearRowCompletion(row);
+    renderQueue();
+    return;
+  }
+
+  const now = window.performance.now();
+  const completingFrom = displayedProgress(row, now);
+  row.progress = 1;
+  row.status = "active";
+  row.startedAt = startedAt;
+  row.completingFrom = completingFrom;
+  row.completingStartedAt = now;
+  row.completingDurationMs = remainingMs;
+  renderQueue();
+
+  const existingTimer = completionTimers.get(row.id);
+  if (existingTimer) {
+    window.clearTimeout(existingTimer);
+  }
+
+  completionTimers.set(row.id, window.setTimeout(() => {
+    completionTimers.delete(row.id);
+    row.status = "done";
+    row.startedAt = null;
+    row.progress = 1;
+    clearRowCompletion(row);
+    renderQueue();
+  }, remainingMs));
 }
 
 async function startCompression({ resume = false } = {}) {
@@ -563,6 +816,17 @@ async function startCompression({ resume = false } = {}) {
 async function init() {
   const api = compressorApi();
 
+  if (elements.windowDragRegion) {
+    elements.windowDragRegion.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || !api || !api.startWindowDrag) {
+        return;
+      }
+
+      event.preventDefault();
+      api.startWindowDrag().catch(() => {});
+    });
+  }
+
   for (const toggle of elements.toggles) {
     toggle.addEventListener("click", () => {
       openSection(toggle.closest(".accordion-section").dataset.section);
@@ -571,6 +835,9 @@ async function init() {
 
   elements.qualitySlider.addEventListener("input", updateQualityText);
   elements.resetButton.addEventListener("click", resetSelection);
+  elements.outputRestartButton.addEventListener("click", async () => {
+    await startCompression();
+  });
   elements.outputActionButton.addEventListener("click", async () => {
     const actionState = outputActionState();
 
@@ -596,6 +863,7 @@ async function init() {
   updateQualityText();
   renderQueue();
   updateControls();
+  openSection("source");
 
   if (!api) {
     return;
@@ -608,8 +876,37 @@ async function init() {
   updateControls();
 
   elements.selectFileButton.addEventListener("click", async () => {
-    await loadSelection(await api.selectFile());
+    try {
+      await loadSelection(await api.selectFile());
+    } catch (error) {
+      elements.summaryText.textContent = `File picker failed to open. ${error.message}`;
+      openSection("output");
+    }
   });
+
+  if (api.onDroppedPaths) {
+    api.onDroppedPaths(async (paths, position) => {
+      if (!canAcceptDrop() || !isPositionInDropZone(position)) {
+        return;
+      }
+
+      state.dragDepth = 0;
+      setDropActive(false);
+      await loadDroppedPaths(paths);
+    });
+  }
+
+  if (api.onDropState) {
+    api.onDropState((active, position) => {
+      if (!canAcceptDrop()) {
+        return;
+      }
+
+      const isInsideDropZone = active && isPositionInDropZone(position);
+      state.dragDepth = isInsideDropZone ? 1 : 0;
+      setDropActive(isInsideDropZone);
+    });
+  }
 
   elements.dropZone.addEventListener("dragenter", (event) => {
     if (!canAcceptDrop(event)) {
