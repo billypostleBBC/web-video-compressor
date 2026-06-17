@@ -134,6 +134,7 @@
     selectionFromDroppedPaths: (paths) =>
       invoke("selection_from_dropped_paths", { paths }),
     previewInputs: (selection) => invoke("preview_inputs", { selection }),
+    releaseSelection: async () => ({ ok: true }),
     start: (options) => invoke("start", options),
     cancel: () => invoke("cancel"),
     startWindowDrag: async () => {

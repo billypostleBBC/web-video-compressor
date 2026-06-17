@@ -1,23 +1,10 @@
-const qualityKeys = ["low", "medium", "high"];
-const qualityLabels = {
-  low: "Low",
-  medium: "Medium",
-  high: "High"
-};
-const qualityDescriptions = {
-  low: "Smaller files, faster exports",
-  medium: "Default, for balanced quality and size",
-  high: "Higher fidelity, larger files"
-};
-const exportDefinitions = [
-  { jobLabel: "1080p MP4", suffix: "1080p.mp4" },
-  { jobLabel: "1080p WebM", suffix: "1080p.webm" },
-  { jobLabel: "720p MP4", suffix: "720p.mp4" },
-  { jobLabel: "720p WebM", suffix: "720p.webm" },
-  { jobLabel: "480p MP4", suffix: "480p.mp4" },
-  { jobLabel: "480p WebM", suffix: "480p.webm" },
-  { jobLabel: "Poster JPG", suffix: "poster.jpg" }
-];
+const {
+  QUALITY_KEYS: qualityKeys,
+  buildRowId,
+  createOutputRows,
+  fileName,
+  qualityPreset
+} = window.CompressorPlan;
 const chevronMotionMs = 360;
 const panelMotionMs = 260;
 const minimumJobProgressAnimationMs = 1000;
@@ -33,6 +20,7 @@ const state = {
   videos: [],
   outputDir: null,
   outputRows: [],
+  selectionGuidance: [],
   running: false,
   toolsOk: false,
   dragDepth: 0,
@@ -51,6 +39,7 @@ const elements = {
   outputSubtitle: document.querySelector("#outputSubtitle"),
   dropZone: document.querySelector("#dropZone"),
   sourceSelection: document.querySelector("#sourceSelection"),
+  sourceGuidance: document.querySelector("#sourceGuidance"),
   selectFileButton: document.querySelector("#selectFileButton"),
   resetButton: document.querySelector("#resetButton"),
   selectionText: document.querySelector("#selectionText"),
@@ -60,19 +49,23 @@ const elements = {
   qualityDescription: document.querySelector("#qualityDescription"),
   summaryText: document.querySelector("#summaryText"),
   runActions: document.querySelector("#runActions"),
-  outputRestartButton: document.querySelector("#outputRestartButton"),
+  downloadZipButton: document.querySelector("#downloadZipButton"),
   outputActionButton: document.querySelector("#outputActionButton"),
   queueList: document.querySelector("#queueList")
 };
-
-function fileName(filePath) {
-  return filePath.split(/[\\/]/).pop();
-}
 
 function truncateStart(text, maxLength = 42) {
   return text.length > maxLength
     ? `...${text.slice(-(maxLength - 3))}`
     : text;
+}
+
+function displaySourceName(source) {
+  if (typeof source === "string") {
+    return fileName(source);
+  }
+
+  return source && (source.displayName || source.name || fileName(source.path));
 }
 
 function currentQualityKey() {
@@ -81,6 +74,10 @@ function currentQualityKey() {
 
 function compressorApi() {
   return window.compressor || null;
+}
+
+function zipApi() {
+  return window.CompressorZip || null;
 }
 
 function clearPendingWindowResize() {
@@ -139,33 +136,21 @@ function completedOutputCount() {
   return state.outputRows.filter((row) => row.status === "done").length;
 }
 
-function buildRowId(inputPath, label) {
-  return `${inputPath}::${label}`;
+function completedDownloadRows() {
+  return state.outputRows.filter((row) => row.status === "done" && row.downloadUrl);
 }
 
-function createOutputRows(videos) {
-  return videos.flatMap((video) =>
-    exportDefinitions.map((exportDefinition) => ({
-      id: buildRowId(video, exportDefinition.jobLabel),
-      inputPath: video,
-      sourceName: fileName(video),
-      jobLabel: exportDefinition.jobLabel,
-      label: outputFileName(video, exportDefinition.suffix),
-      status: "waiting",
-      progress: 0,
-      startedAt: null,
-      completingFrom: null,
-      completingStartedAt: null,
-      completingDurationMs: null
-    }))
-  );
+function shouldWarnBeforeUnload() {
+  return state.running || completedDownloadRows().length > 0;
 }
 
-function outputFileName(inputPath, suffix) {
-  const sourceName = fileName(inputPath);
-  const extensionIndex = sourceName.lastIndexOf(".");
-  const baseName = extensionIndex > 0 ? sourceName.slice(0, extensionIndex) : sourceName;
-  return `${baseName}-${suffix}`;
+function handleBeforeUnload(event) {
+  if (!shouldWarnBeforeUnload()) {
+    return;
+  }
+
+  event.preventDefault();
+  event.returnValue = "";
 }
 
 function scheduleSection(section, callback, delay) {
@@ -227,7 +212,7 @@ function updateSubtitles() {
     ? (state.activeSection === "source" ? "No files selected" : "")
     : String(fileCount);
 
-  elements.compressionSubtitle.textContent = qualityLabels[currentQualityKey()];
+  elements.compressionSubtitle.textContent = qualityPreset(currentQualityKey()).label;
 
   const total = outputCount();
   const complete = completedOutputCount();
@@ -276,6 +261,16 @@ function renderQueue() {
 
     const name = document.createElement("strong");
     name.textContent = row.label;
+
+    if (row.downloadUrl) {
+      const link = document.createElement("a");
+      link.className = "queue-download";
+      link.href = row.downloadUrl;
+      link.download = row.downloadName || row.label;
+      link.textContent = row.label;
+      name.textContent = "";
+      name.append(link);
+    }
 
     const status = document.createElement("span");
     status.className = "queue-status";
@@ -372,6 +367,39 @@ function clearRowCompletion(row) {
   row.completingDurationMs = null;
 }
 
+function clearRowDownload(row) {
+  if (row.downloadUrl && window.URL && window.URL.revokeObjectURL) {
+    window.URL.revokeObjectURL(row.downloadUrl);
+  }
+
+  row.downloadUrl = null;
+  row.downloadName = null;
+  row.byteLength = null;
+}
+
+function resetRowForNewRun(row) {
+  row.status = "waiting";
+  row.progress = 0;
+  row.startedAt = null;
+  clearRowCompletion(row);
+  clearRowDownload(row);
+}
+
+function releaseSelection(selection) {
+  const api = compressorApi();
+  if (!selection || !api || !api.releaseSelection) {
+    return;
+  }
+
+  api.releaseSelection(selection).catch(() => {});
+}
+
+function clearOutputDownloads() {
+  for (const row of state.outputRows) {
+    clearRowDownload(row);
+  }
+}
+
 function selectedSourceLabels() {
   if (!state.selection || state.videos.length === 0) {
     return [];
@@ -383,7 +411,7 @@ function selectedSourceLabels() {
     ];
   }
 
-  return state.videos.map((video) => truncateStart(fileName(video)));
+  return state.videos.map((video) => truncateStart(displaySourceName(video)));
 }
 
 function renderSourceSelection() {
@@ -399,6 +427,10 @@ function renderSourceSelection() {
     item.textContent = label;
     elements.sourceSelection.append(item);
   }
+
+  const guidance = state.selectionGuidance.join(" ");
+  elements.sourceGuidance.hidden = guidance.length === 0;
+  elements.sourceGuidance.textContent = guidance;
 
   scheduleWindowResize();
 }
@@ -426,19 +458,24 @@ function statusLabel(status) {
 function updateControls() {
   const isCancelled = state.runState === "cancelled";
   const isFinished = state.runState === "finished";
+  const isFailed = state.runState === "failed";
   const canStart = state.toolsOk
     && state.videos.length > 0
     && !state.running
     && !isCancelled
-    && !isFinished;
+    && !isFinished
+    && !isFailed;
   const actionState = outputActionState();
-  const showRestartButton = isCancelled;
 
   elements.outputActionButton.textContent = actionState.label;
   elements.outputActionButton.disabled = actionState.disabled || (!canStart && actionState.kind === "start");
-  elements.outputActionButton.classList.toggle("secondary", actionState.kind === "stop" || actionState.kind === "resume");
-  elements.outputRestartButton.hidden = !showRestartButton;
-  elements.outputRestartButton.disabled = !showRestartButton || state.running || state.outputRows.length === 0;
+  elements.outputActionButton.classList.toggle("secondary", actionState.kind === "stop");
+  const zipRows = completedDownloadRows();
+  elements.downloadZipButton.hidden = zipRows.length === 0;
+  elements.downloadZipButton.disabled = state.running || zipRows.length === 0 || !zipApi();
+  elements.downloadZipButton.textContent = zipRows.length > 0
+    ? `Download ZIP (${zipRows.length})`
+    : "Download ZIP";
   elements.selectFileButton.disabled = state.running;
   elements.resetButton.disabled = state.running || !state.selection;
   elements.resetButton.hidden = !state.selection;
@@ -457,13 +494,13 @@ function outputActionState() {
 
   if (state.runState === "cancelled") {
     return {
-      kind: "resume",
-      label: "Resume",
-      disabled: !state.toolsOk || state.videos.length === 0
+      kind: "restart",
+      label: "Restart",
+      disabled: !state.toolsOk || state.videos.length === 0 || state.outputRows.length === 0
     };
   }
 
-  if (state.runState === "finished") {
+  if (state.runState === "finished" || state.runState === "failed") {
     return {
       kind: "restart",
       label: "Restart",
@@ -484,7 +521,10 @@ function selectionLabel(selection) {
   }
 
   if (selection.type === "files") {
-    return `${selection.paths.length} files selected`;
+    const fileCount = Array.isArray(selection.fileIds)
+      ? selection.fileIds.length
+      : (Array.isArray(selection.paths) ? selection.paths.length : 0);
+    return `${fileCount} file${fileCount === 1 ? "" : "s"} selected`;
   }
 
   return fileName(selection.path);
@@ -493,21 +533,25 @@ function selectionLabel(selection) {
 function updateQualityText() {
   const key = currentQualityKey();
   const value = Number(elements.qualitySlider.value);
-  elements.qualityLabel.textContent = qualityLabels[key];
-  elements.qualityDescription.textContent = qualityDescriptions[key];
+  const preset = qualityPreset(key);
+  elements.qualityLabel.textContent = preset.label;
+  elements.qualityDescription.textContent = preset.description;
   elements.qualitySlider.style.setProperty("--quality-percent", `${value * 50}%`);
   for (const tick of document.querySelectorAll(".quality-ticks span")) {
-    tick.classList.toggle("quality-tick--active", tick.textContent === qualityLabels[key]);
+    tick.classList.toggle("quality-tick--active", tick.textContent === preset.label);
   }
   updateSubtitles();
 }
 
 function resetSelection() {
   clearCompletionTimers();
+  clearOutputDownloads();
+  releaseSelection(state.selection);
   state.selection = null;
   state.videos = [];
   state.outputDir = null;
   state.outputRows = [];
+  state.selectionGuidance = [];
   state.runState = "idle";
   state.dragDepth = 0;
 
@@ -531,11 +575,15 @@ async function loadSelection(selection) {
     return;
   }
 
-  state.selection = selection;
-  clearCompletionTimers();
   const preview = await api.previewInputs(selection);
+  const previousSelection = state.selection;
+  clearCompletionTimers();
+  clearOutputDownloads();
+  releaseSelection(previousSelection);
+  state.selection = selection;
   state.videos = preview.videos;
   state.outputDir = preview.outputDir;
+  state.selectionGuidance = Array.isArray(preview.guidance) ? preview.guidance : [];
   state.outputRows = createOutputRows(preview.videos);
   state.runState = "idle";
 
@@ -544,8 +592,14 @@ async function loadSelection(selection) {
     ? `Output: ${state.outputDir}`
     : "";
   elements.summaryText.textContent = state.videos.length === 0
-    ? "No .mov or .mp4 files found."
-    : `${state.outputRows.length} outputs queued from ${state.videos.length} source file${state.videos.length === 1 ? "" : "s"}.`;
+    ? [
+      "No .mov or .mp4 files found.",
+      ...state.selectionGuidance
+    ].join(" ")
+    : [
+      `${state.outputRows.length} outputs queued from ${state.videos.length} source file${state.videos.length === 1 ? "" : "s"}.`,
+      ...state.selectionGuidance
+    ].join(" ");
 
   renderSourceSelection();
   renderQueue();
@@ -655,13 +709,97 @@ function markIncompleteRows(status) {
   renderQueue();
 }
 
+function completedDownloadMessage(prefix) {
+  const count = completedOutputCount();
+  if (count === 0) {
+    return prefix;
+  }
+
+  return `${prefix} ${count} completed download${count === 1 ? "" : "s"} remain available below.`;
+}
+
+function zipFileName() {
+  if (state.videos.length === 1) {
+    const source = displaySourceName(state.videos[0]) || "video";
+    const extensionIndex = source.lastIndexOf(".");
+    const baseName = extensionIndex > 0 ? source.slice(0, extensionIndex) : source;
+    return `${baseName}-web-video-exports.zip`;
+  }
+
+  return "web-video-exports.zip";
+}
+
+function uniqueZipEntryName(row, usedNames) {
+  const originalName = row.downloadName || row.label;
+  if (!usedNames.has(originalName)) {
+    usedNames.add(originalName);
+    return originalName;
+  }
+
+  const extensionIndex = originalName.lastIndexOf(".");
+  const baseName = extensionIndex > 0 ? originalName.slice(0, extensionIndex) : originalName;
+  const extension = extensionIndex > 0 ? originalName.slice(extensionIndex) : "";
+  let counter = 2;
+  let candidate = `${baseName}-${counter}${extension}`;
+
+  while (usedNames.has(candidate)) {
+    counter += 1;
+    candidate = `${baseName}-${counter}${extension}`;
+  }
+
+  usedNames.add(candidate);
+  return candidate;
+}
+
+async function downloadCompletedZip() {
+  const zip = zipApi();
+  const rows = completedDownloadRows();
+
+  if (!zip || rows.length === 0) {
+    return;
+  }
+
+  const previousSummary = elements.summaryText.textContent;
+  elements.downloadZipButton.disabled = true;
+  elements.summaryText.textContent = `Preparing ZIP from ${rows.length} completed output${rows.length === 1 ? "" : "s"}...`;
+
+  try {
+    const usedNames = new Set();
+    const entries = [];
+
+    for (const row of rows) {
+      const response = await fetch(row.downloadUrl);
+      if (!response.ok) {
+        throw new Error(`${row.label} could not be read from the browser download cache.`);
+      }
+
+      entries.push({
+        name: uniqueZipEntryName(row, usedNames),
+        blob: await response.blob()
+      });
+    }
+
+    const blob = await zip.createStoredZip(entries);
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = zipFileName();
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 5000);
+    elements.summaryText.textContent = `${previousSummary} ZIP download prepared.`;
+  } catch (error) {
+    elements.summaryText.textContent = `ZIP download failed. ${error.message}`;
+  } finally {
+    updateControls();
+  }
+}
+
 function resetOutputRows() {
   clearCompletionTimers();
   for (const row of state.outputRows) {
-    row.status = "waiting";
-    row.progress = 0;
-    row.startedAt = null;
-    clearRowCompletion(row);
+    resetRowForNewRun(row);
   }
   state.runState = "idle";
   elements.summaryText.textContent = `${state.outputRows.length} outputs queued from ${state.videos.length} source file${state.videos.length === 1 ? "" : "s"}.`;
@@ -674,13 +812,17 @@ function handleEncoderEvent(event) {
     state.runState = "running";
     clearCompletionTimers();
     for (const row of state.outputRows) {
-      row.status = "waiting";
-      row.progress = 0;
-      row.startedAt = null;
-      clearRowCompletion(row);
+      resetRowForNewRun(row);
     }
-    elements.summaryText.textContent = `Writing exports to ${event.outputDir}`;
+    elements.summaryText.textContent = event.outputDir === "browser downloads"
+      ? "Encoding in this browser. Completed outputs will appear as download links."
+      : `Writing exports to ${event.outputDir}`;
     renderQueue();
+  }
+
+  if (event.type === "run-loading") {
+    elements.summaryText.textContent = event.message;
+    openSection("output");
   }
 
   if (event.type === "job-started") {
@@ -721,14 +863,16 @@ function handleEncoderEvent(event) {
   if (event.type === "run-finished") {
     state.running = false;
     state.runState = "finished";
-    elements.summaryText.textContent = `Finished. Outputs are in ${event.outputDir}`;
+    elements.summaryText.textContent = event.outputDir === "download links below"
+      ? "Finished. Download links are available below."
+      : `Finished. Outputs are in ${event.outputDir}`;
     updateControls();
   }
 
   if (event.type === "run-cancelled" || event.type === "run-failed") {
     state.running = false;
     state.runState = event.type === "run-cancelled" ? "cancelled" : "failed";
-    elements.summaryText.textContent = event.message;
+    elements.summaryText.textContent = completedDownloadMessage(event.message);
     markIncompleteRows(event.type === "run-cancelled" ? "cancelled" : "error");
     updateControls();
     openSection("output");
@@ -742,6 +886,9 @@ function finishOutputRow(event) {
   }
 
   const startedAt = row.startedAt || window.performance.now();
+  row.downloadUrl = event.downloadUrl || row.downloadUrl;
+  row.downloadName = event.outputName || row.downloadName;
+  row.byteLength = event.byteLength || row.byteLength;
   const remainingMs = Math.max(
     0,
     minimumJobProgressAnimationMs - (window.performance.now() - startedAt)
@@ -781,17 +928,13 @@ function finishOutputRow(event) {
   }, remainingMs));
 }
 
-async function startCompression({ resume = false } = {}) {
+async function startCompression() {
   const api = compressorApi();
   if (!api || state.running) {
     return;
   }
 
-  if (!resume) {
-    resetOutputRows();
-  } else {
-    markIncompleteRows("waiting");
-  }
+  resetOutputRows();
 
   state.running = true;
   state.runState = "running";
@@ -806,7 +949,7 @@ async function startCompression({ resume = false } = {}) {
   if (!result.ok) {
     state.running = false;
     state.runState = result.cancelled ? "cancelled" : "failed";
-    elements.summaryText.textContent = result.message;
+    elements.summaryText.textContent = completedDownloadMessage(result.message);
     markIncompleteRows(result.cancelled ? "cancelled" : "error");
     updateControls();
     openSection("output");
@@ -835,19 +978,13 @@ async function init() {
 
   elements.qualitySlider.addEventListener("input", updateQualityText);
   elements.resetButton.addEventListener("click", resetSelection);
-  elements.outputRestartButton.addEventListener("click", async () => {
-    await startCompression();
-  });
+  elements.downloadZipButton.addEventListener("click", downloadCompletedZip);
+  window.addEventListener("beforeunload", handleBeforeUnload);
   elements.outputActionButton.addEventListener("click", async () => {
     const actionState = outputActionState();
 
     if (actionState.kind === "start" || actionState.kind === "restart") {
       await startCompression();
-      return;
-    }
-
-    if (actionState.kind === "resume") {
-      await startCompression({ resume: true });
       return;
     }
 

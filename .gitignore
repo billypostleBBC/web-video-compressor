@@ -1,8 +1,14 @@
 node_modules/
 dist/
+tmp/
+public/
+.astro/
 .DS_Store
 *.app
+src/renderer/vendor/
+src/renderer/test-fixtures/
 src-tauri/target/
 src-tauri/resources/
 src-tauri/gen/
 .playwright-mcp/
+.playwright-cli/

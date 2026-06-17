@@ -1,3 +1,7 @@
+---
+const cacheVersion = "webflow-3";
+---
+
 <!doctype html>
 <html lang="en">
   <head>
@@ -5,7 +9,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Web Video Compressor</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="./styles.css?v=no-titlebar-shell-1" />
+    <link rel="stylesheet" href={`/styles.css?v=${cacheVersion}`} />
   </head>
   <body>
     <div class="window-drag-region" data-tauri-drag-region aria-hidden="true"></div>
@@ -96,10 +100,10 @@
       </div>
     </main>
 
-    <script src="./export-plan.js?v=export-plan-2"></script>
-    <script src="./zip-download.js?v=zip-download-1"></script>
-    <script src="./tauri-adapter.js?v=tauri-adapter-1"></script>
-    <script src="./browser-adapter.js?v=browser-adapter-2"></script>
-    <script src="./renderer.js?v=no-titlebar-shell-1"></script>
+    <script src={`/export-plan.js?v=${cacheVersion}`}></script>
+    <script src={`/zip-download.js?v=${cacheVersion}`}></script>
+    <script src={`/tauri-adapter.js?v=${cacheVersion}`}></script>
+    <script src={`/browser-adapter.js?v=${cacheVersion}`}></script>
+    <script src={`/renderer.js?v=${cacheVersion}`}></script>
   </body>
 </html>

@@ -4,7 +4,15 @@
   "description": "Local-only desktop app for ffmpeg web video exports.",
   "productName": "Web Video Compressor",
   "type": "commonjs",
+  "engines": {
+    "node": ">=22.11.0 <23"
+  },
   "scripts": {
+    "prepare:web": "node scripts/prepare-web-assets.js",
+    "build:web": "npm run prepare:web && node scripts/build-web.js",
+    "verify:web": "npm run build:web && node scripts/verify-web-build.js",
+    "verify:web:url": "node scripts/verify-web-url.js",
+    "serve:web": "npm run prepare:web && npx http-server src/renderer -p 4173 -a 127.0.0.1",
     "package:mac": "node scripts/prepare-tauri-resources.js && tauri build --target aarch64-apple-darwin --bundles app",
     "start": "node scripts/prepare-tauri-resources.js && tauri dev",
     "test": "node --test"
@@ -13,6 +21,10 @@
     "@tauri-apps/cli": "^2.11.2"
   },
   "dependencies": {
+    "astro": "^5.18.2",
+    "@ffmpeg/core": "^0.12.10",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-notification": "^2.3.3",
