@@ -926,6 +926,7 @@ function finishOutputRow(event) {
     row.progress = 1;
     clearRowCompletion(row);
     renderQueue();
+    updateControls();
   }, remainingMs));
 }
 

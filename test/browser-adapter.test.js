@@ -129,6 +129,7 @@ test("browser adapter selects multiple local video files with browser-safe IDs",
   assert.deepEqual(plain(preview.guidance), [
     "Selected 2 files (1 MB total, longest 2m 05s).",
     "Encoding stays on this device and may take longer than the desktop app.",
+    "Keep this browser tab visible while WebM exports run; Chrome can pause the native WebM encoder in hidden or backgrounded windows.",
     "Ignored 1 unsupported file: notes.txt. Use .mov or .mp4."
   ]);
   assert.deepEqual(
@@ -175,7 +176,8 @@ test("browser adapter warns before encoding large browser selections", async () 
 
   assert.deepEqual(plain(preview.guidance), [
     "Selected 1 file (600 MB total, longest 2m 05s).",
-    "Browser encoding can be slow or run out of memory on large or long videos; keep this tab open and use the desktop app if it fails."
+    "Browser encoding can be slow or run out of memory on large or long videos; keep this tab open and use the desktop app if it fails.",
+    "Keep this browser tab visible while WebM exports run; Chrome can pause the native WebM encoder in hidden or backgrounded windows."
   ]);
 });
 
@@ -198,6 +200,7 @@ test("browser adapter recommends desktop browsers in small touch contexts", asyn
   assert.deepEqual(plain(preview.guidance), [
     "Selected 1 file (1 MB total, longest 2m 05s).",
     "Encoding stays on this device and may take longer than the desktop app.",
+    "Keep this browser tab visible while WebM exports run; Chrome can pause the native WebM encoder in hidden or backgrounded windows.",
     "Large video processing is desktop-recommended; mobile and small-screen browsers may fail sooner because of memory limits."
   ]);
 });

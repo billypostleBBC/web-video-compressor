@@ -226,6 +226,8 @@
       guidance.push("Encoding stays on this device and may take longer than the desktop app.");
     }
 
+    guidance.push("Keep this browser tab visible while WebM exports run; Chrome can pause the native WebM encoder in hidden or backgrounded windows.");
+
     if (isDesktopRecommendedContext()) {
       guidance.push("Large video processing is desktop-recommended; mobile and small-screen browsers may fail sooner because of memory limits.");
     }
