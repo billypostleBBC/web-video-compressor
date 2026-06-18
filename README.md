@@ -133,9 +133,9 @@ All exports run sequentially. That is slower than parallel processing, but easie
 
 The browser app uses the single-thread `@ffmpeg/core` build first. That avoids requiring cross-origin isolation headers before Webflow Cloud header support is proven. The trade-off is slower encoding.
 
-The browser wasm build successfully generates all seven expected outputs from a small test source. One browser-specific codec adjustment is currently required: `480p` WebM uses VP8 (`libvpx`) instead of VP9 because the single-thread wasm VP9 encoder crashes with `RuntimeError: memory access out of bounds` at the `854x480` target. `1080p` and `720p` WebM still use VP9.
+The browser wasm build keeps the seven-output contract, but it uses browser-specific encoder settings. MP4 uses x264 `veryfast` instead of `medium` because native-style x264 settings are too slow in wasm. WebM uses VP8 (`libvpx`) instead of VP9, single-thread encoding, and no lookahead/alt-ref buffering because wasm VP9 and default VP8 settings have produced `RuntimeError: memory access out of bounds` failures on 1080p sources. The trade-off is larger WebM files than native VP9. The desktop app still uses native ffmpeg's VP9 path.
 
-The browser adapter creates a fresh wasm worker per output. This is slower, but it avoids memory reuse failures observed when multiple outputs are encoded in one wasm instance.
+The browser adapter creates a fresh wasm worker per output and deletes wasm virtual filesystem files after every job, including failed jobs. This is slower, but it avoids memory reuse failures observed when multiple outputs are encoded in one wasm instance.
 
 Completed browser outputs are kept as download links if a later job fails or the user cancels. Those links are Blob URLs and only last while the page remains open.
 

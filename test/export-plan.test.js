@@ -228,7 +228,48 @@ test("ffmpeg args mirror native codec, quality, and sizing settings", () => {
   );
 });
 
-test("browser ffmpeg args use VP8 for 480p WebM because the single-thread wasm VP9 build fails there", () => {
+test("browser ffmpeg args use faster MP4 preset because wasm x264 medium is too slow", () => {
+  assert.deepEqual(
+    buildBrowserFfmpegArgs(EXPORT_DEFINITIONS[0], "input.mov", "launch-1080p.mp4", "medium"),
+    [
+      "-i",
+      "input.mov",
+      "-vf",
+      "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "30",
+      "-pix_fmt",
+      "yuv420p",
+      "-movflags",
+      "+faststart",
+      "-c:a",
+      "aac",
+      "-b:a",
+      "160k",
+      "launch-1080p.mp4"
+    ]
+  );
+});
+
+test("browser ffmpeg args use low-memory VP8 settings for WebM", () => {
+  for (const [index, outputName] of [
+    [1, "launch-1080p.webm"],
+    [3, "launch-720p.webm"],
+    [5, "launch-480p.webm"]
+  ]) {
+    const args = buildBrowserFfmpegArgs(EXPORT_DEFINITIONS[index], "input.mov", outputName, "medium");
+    assert(args.includes("libvpx"));
+    assert(!args.includes("libvpx-vp9"));
+    assert(!args.includes("-row-mt"));
+    assert(args.includes("-lag-in-frames"));
+    assert(args.includes("-auto-alt-ref"));
+    assert(args.includes("-threads"));
+  }
+
   assert.deepEqual(
     buildBrowserFfmpegArgs(EXPORT_DEFINITIONS[5], "input.mov", "launch-480p.webm", "medium"),
     [
@@ -242,17 +283,23 @@ test("browser ffmpeg args use VP8 for 480p WebM because the single-thread wasm V
       "0",
       "-crf",
       "42",
-      "-row-mt",
-      "1",
       "-c:a",
       "libopus",
       "-b:a",
       "128k",
+      "-deadline",
+      "realtime",
+      "-cpu-used",
+      "8",
+      "-lag-in-frames",
+      "0",
+      "-auto-alt-ref",
+      "0",
+      "-threads",
+      "1",
       "launch-480p.webm"
     ]
   );
-
-  assert(buildBrowserFfmpegArgs(EXPORT_DEFINITIONS[1], "input.mov", "launch-1080p.webm", "medium").includes("libvpx-vp9"));
 });
 
 test("file validation accepts only mp4 and mov names case-insensitively", () => {

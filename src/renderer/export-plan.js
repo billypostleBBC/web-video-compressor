@@ -180,11 +180,36 @@
   function buildBrowserFfmpegArgs(exportDefinition, inputName, outputName, qualityKey) {
     const args = buildFfmpegArgs(exportDefinition, inputName, outputName, qualityKey);
 
-    if (exportDefinition.kind === "webm" && exportDefinition.width <= 854) {
+    if (exportDefinition.kind === "mp4") {
+      const presetIndex = args.indexOf("-preset");
+      if (presetIndex !== -1) {
+        args[presetIndex + 1] = "veryfast";
+      }
+    }
+
+    if (exportDefinition.kind === "webm") {
       const codecIndex = args.indexOf("libvpx-vp9");
       if (codecIndex !== -1) {
         args[codecIndex] = "libvpx";
       }
+
+      const rowMtIndex = args.indexOf("-row-mt");
+      if (rowMtIndex !== -1) {
+        args.splice(rowMtIndex, 2);
+      }
+
+      args.splice(args.length - 1, 0,
+        "-deadline",
+        "realtime",
+        "-cpu-used",
+        "8",
+        "-lag-in-frames",
+        "0",
+        "-auto-alt-ref",
+        "0",
+        "-threads",
+        "1"
+      );
     }
 
     return args;

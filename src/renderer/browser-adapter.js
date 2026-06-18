@@ -14,6 +14,7 @@
   let ffmpeg = null;
   let ffmpegLoading = null;
   let activeJob = null;
+  let activeNativeAbort = null;
   let cancelled = false;
   let ffmpegCoreBlobUrls = null;
   const largeFileWarningBytes = 500 * 1024 * 1024;
@@ -357,6 +358,261 @@
     return "image/jpeg";
   }
 
+  function nativeWebmMimeType() {
+    if (!window.MediaRecorder || !window.MediaRecorder.isTypeSupported) {
+      return "";
+    }
+
+    for (const mimeType of [
+      "video/webm;codecs=vp8,opus",
+      "video/webm;codecs=vp8",
+      "video/webm"
+    ]) {
+      if (window.MediaRecorder.isTypeSupported(mimeType)) {
+        return mimeType;
+      }
+    }
+
+    return "";
+  }
+
+  function nativeWebmBitrate(width, qualityKey) {
+    const qualityMultipliers = {
+      low: 0.65,
+      medium: 1,
+      high: 1.45
+    };
+    const baseBitrate = width >= 1920
+      ? 3500000
+      : (width >= 1280 ? 2200000 : 1200000);
+
+    return Math.round(baseBitrate * (qualityMultipliers[qualityKey] || qualityMultipliers.medium));
+  }
+
+  function drawContainedVideoFrame(context, video, width, height) {
+    const sourceWidth = video.videoWidth || width;
+    const sourceHeight = video.videoHeight || height;
+    const scale = Math.min(width / sourceWidth, height / sourceHeight);
+    const drawWidth = Math.round(sourceWidth * scale);
+    const drawHeight = Math.round(sourceHeight * scale);
+    const drawX = Math.round((width - drawWidth) / 2);
+    const drawY = Math.round((height - drawHeight) / 2);
+
+    context.fillStyle = "black";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(video, drawX, drawY, drawWidth, drawHeight);
+  }
+
+  function waitForVideoEvent(video, eventName) {
+    return new Promise((resolve, reject) => {
+      const cleanup = () => {
+        video.removeEventListener(eventName, handleEvent);
+        video.removeEventListener("error", handleError);
+      };
+      const handleEvent = () => {
+        cleanup();
+        resolve();
+      };
+      const handleError = () => {
+        cleanup();
+        reject(new Error("The browser could not decode this source video."));
+      };
+
+      video.addEventListener(eventName, handleEvent, { once: true });
+      video.addEventListener("error", handleError, { once: true });
+    });
+  }
+
+  async function createAudioTracks(video) {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) {
+      return {
+        tracks: [],
+        cleanup: () => {}
+      };
+    }
+
+    const audioContext = new AudioContext();
+    const source = audioContext.createMediaElementSource(video);
+    const destination = audioContext.createMediaStreamDestination();
+    source.connect(destination);
+
+    if (audioContext.state === "suspended") {
+      await audioContext.resume();
+    }
+
+    return {
+      tracks: destination.stream.getAudioTracks(),
+      cleanup: () => {
+        source.disconnect();
+        audioContext.close().catch(() => {});
+      }
+    };
+  }
+
+  async function executeNativeWebmJob(record, exportDefinition, qualityKey) {
+    const mimeType = nativeWebmMimeType();
+    if (!mimeType || !window.MediaStream) {
+      throw new Error("This browser cannot create WebM outputs without ffmpeg.wasm.");
+    }
+
+    const browserUrl = window.URL;
+    const video = document.createElement("video");
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d", { alpha: false });
+    const chunks = [];
+    let sourceUrl = null;
+    let recorder = null;
+    let audioCleanup = () => {};
+    let stream = null;
+    let stopped = false;
+    let animationFrame = null;
+
+    canvas.width = exportDefinition.width;
+    canvas.height = exportDefinition.height;
+    video.preload = "auto";
+    video.muted = true;
+    video.playsInline = true;
+
+    function cleanup() {
+      stopped = true;
+      activeNativeAbort = null;
+      if (animationFrame) {
+        window.cancelAnimationFrame(animationFrame);
+      }
+      if (recorder && recorder.state !== "inactive") {
+        recorder.stop();
+      }
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+      video.pause();
+      audioCleanup();
+      if (sourceUrl) {
+        browserUrl.revokeObjectURL(sourceUrl);
+      }
+    }
+
+    try {
+      sourceUrl = browserUrl.createObjectURL(record.file);
+      video.src = sourceUrl;
+      await waitForVideoEvent(video, "loadedmetadata");
+
+      const canvasStream = canvas.captureStream(25);
+      const audio = await createAudioTracks(video);
+      audioCleanup = audio.cleanup;
+      stream = new MediaStream([
+        ...canvasStream.getVideoTracks(),
+        ...audio.tracks
+      ]);
+
+      recorder = new MediaRecorder(stream, {
+        mimeType,
+        videoBitsPerSecond: nativeWebmBitrate(exportDefinition.width, qualityKey),
+        audioBitsPerSecond: 128000
+      });
+
+      activeNativeAbort = () => {
+        cleanup();
+      };
+
+      const recording = new Promise((resolve, reject) => {
+        recorder.addEventListener("dataavailable", (event) => {
+          if (event.data && event.data.size > 0) {
+            chunks.push(event.data);
+          }
+        });
+        recorder.addEventListener("stop", () => {
+          if (cancelled) {
+            reject(new DOMException("Encoding cancelled.", "AbortError"));
+            return;
+          }
+
+          resolve(new Blob(chunks, { type: mimeType }));
+        }, { once: true });
+        recorder.addEventListener("error", () => {
+          reject(new Error("The browser native WebM encoder failed."));
+        }, { once: true });
+      });
+
+      function renderFrame() {
+        if (stopped) {
+          return;
+        }
+
+        drawContainedVideoFrame(context, video, exportDefinition.width, exportDefinition.height);
+        if (activeJob && Number.isFinite(video.duration) && video.duration > 0) {
+          emit({
+            type: "job-progress",
+            inputPath: activeJob.inputPath,
+            label: activeJob.label,
+            progress: Math.min(0.99, video.currentTime / video.duration)
+          });
+        }
+
+        if (video.ended) {
+          if (recorder && recorder.state !== "inactive") {
+            recorder.stop();
+          }
+          return;
+        }
+
+        animationFrame = window.requestAnimationFrame(renderFrame);
+      }
+
+      recorder.start(1000);
+      await video.play();
+      renderFrame();
+
+      const blob = await recording;
+      return blob;
+    } finally {
+      cleanup();
+    }
+  }
+
+  async function executeNativePosterJob(record, exportDefinition) {
+    const browserUrl = window.URL;
+    const video = document.createElement("video");
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d", { alpha: false });
+    let sourceUrl = null;
+
+    canvas.width = exportDefinition.width;
+    canvas.height = exportDefinition.height;
+    video.preload = "auto";
+    video.muted = true;
+    video.playsInline = true;
+
+    try {
+      sourceUrl = browserUrl.createObjectURL(record.file);
+      video.src = sourceUrl;
+      await waitForVideoEvent(video, "loadedmetadata");
+      await waitForVideoEvent(video, "loadeddata");
+      const posterTime = Math.min(3, Math.max(0, (video.duration || 0) - 0.1));
+      if (posterTime > 0) {
+        video.currentTime = posterTime;
+        await waitForVideoEvent(video, "seeked");
+      }
+      drawContainedVideoFrame(context, video, exportDefinition.width, exportDefinition.height);
+
+      return await new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error("The browser could not create the poster image."));
+          }
+        }, "image/jpeg", 0.92);
+      });
+    } finally {
+      video.pause();
+      if (sourceUrl) {
+        browserUrl.revokeObjectURL(sourceUrl);
+      }
+    }
+  }
+
   function failureMessage(error) {
     const message = error && error.message ? error.message : String(error || "");
 
@@ -386,10 +642,10 @@
       }
 
       const data = await instance.readFile(outputName);
-      await removeVirtualFile(instance, outputName);
-      await removeVirtualFile(instance, inputName);
       return data;
     } finally {
+      await removeVirtualFile(instance, outputName);
+      await removeVirtualFile(instance, inputName);
       instance.terminate();
       if (ffmpeg === instance) {
         ffmpeg = null;
@@ -413,24 +669,16 @@
         ...eventBase
       });
 
-      const args = plan.buildBrowserFfmpegArgs(exportDefinition, inputName, outputName, qualityKey);
-      let data;
-      try {
-        data = await executeFfmpegJob(record, inputName, outputName, args);
-      } catch (error) {
-        if (exportDefinition.kind !== "poster") {
-          throw error;
-        }
-
-        data = await executeFfmpegJob(
-          record,
-          inputName,
-          outputName,
-          plan.buildPosterFallbackArgs(inputName, outputName)
-        );
+      let blob;
+      if (exportDefinition.kind === "webm") {
+        blob = await executeNativeWebmJob(record, exportDefinition, qualityKey);
+      } else if (exportDefinition.kind === "poster") {
+        blob = await executeNativePosterJob(record, exportDefinition);
+      } else {
+        const args = plan.buildBrowserFfmpegArgs(exportDefinition, inputName, outputName, qualityKey);
+        const data = await executeFfmpegJob(record, inputName, outputName, args);
+        blob = new Blob([data], { type: outputMimeType(outputName) });
       }
-
-      const blob = new Blob([data], { type: outputMimeType(outputName) });
       const downloadUrl = window.URL.createObjectURL(blob);
 
       emit({
@@ -599,6 +847,9 @@
     cancel: async () => {
       cancelled = true;
       activeJob = null;
+      if (activeNativeAbort) {
+        activeNativeAbort();
+      }
       if (ffmpeg) {
         ffmpeg.terminate();
         ffmpeg = null;

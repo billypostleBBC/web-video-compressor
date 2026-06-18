@@ -11,11 +11,11 @@ const checks = [
     type: "text/html",
     includes: [
       "Web Video Compressor",
-      `${appBasePath}/styles.css`,
-      `${appBasePath}/export-plan.js`,
-      `${appBasePath}/zip-download.js`,
-      `${appBasePath}/browser-adapter.js`,
-      `${appBasePath}/renderer.js`
+      "./styles.css",
+      "./export-plan.js",
+      "./zip-download.js",
+      "./browser-adapter.js",
+      "./renderer.js"
     ]
   },
   { path: `${appBasePath}/styles.css?v=verify`, type: "text/css", includes: [".app-shell"] },

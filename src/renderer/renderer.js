@@ -828,6 +828,7 @@ function handleEncoderEvent(event) {
   if (event.type === "job-started") {
     const row = findOutputRow(event);
     if (row) {
+      elements.summaryText.textContent = `Encoding ${row.label}...`;
       const existingTimer = completionTimers.get(row.id);
       if (existingTimer) {
         window.clearTimeout(existingTimer);
