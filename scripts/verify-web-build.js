@@ -4,23 +4,26 @@ const path = require("node:path");
 
 const root = path.join(__dirname, "..");
 const webDir = path.join(root, "dist/web");
+const appBasePath = "/web-video-compressor";
 const checks = [
   {
-    path: "/",
+    path: appBasePath,
     type: "text/html",
     includes: [
       "Web Video Compressor",
-      "/export-plan.js",
-      "/zip-download.js",
-      "/browser-adapter.js",
-      "/renderer.js"
+      `${appBasePath}/styles.css`,
+      `${appBasePath}/export-plan.js`,
+      `${appBasePath}/zip-download.js`,
+      `${appBasePath}/browser-adapter.js`,
+      `${appBasePath}/renderer.js`
     ]
   },
-  { path: "/export-plan.js?v=verify", type: "javascript", includes: ["CompressorPlan"] },
-  { path: "/zip-download.js?v=verify", type: "javascript", includes: ["CompressorZip"] },
-  { path: "/browser-adapter.js?v=verify", type: "javascript", includes: ["window.compressor"] },
-  { path: "/vendor/ffmpeg/ffmpeg/index.js", type: "javascript" },
-  { path: "/vendor/ffmpeg/ffmpeg/worker.js", type: "javascript" }
+  { path: `${appBasePath}/styles.css?v=verify`, type: "text/css", includes: [".app-shell"] },
+  { path: `${appBasePath}/export-plan.js?v=verify`, type: "javascript", includes: ["CompressorPlan"] },
+  { path: `${appBasePath}/zip-download.js?v=verify`, type: "javascript", includes: ["CompressorZip"] },
+  { path: `${appBasePath}/browser-adapter.js?v=verify`, type: "javascript", includes: ["window.compressor"] },
+  { path: `${appBasePath}/vendor/ffmpeg/ffmpeg/index.js`, type: "javascript" },
+  { path: `${appBasePath}/vendor/ffmpeg/ffmpeg/worker.js`, type: "javascript" }
 ];
 const mimeTypes = {
   ".html": "text/html; charset=UTF-8",
@@ -43,7 +46,18 @@ function assertFile(relativePath) {
 function fileForRequest(requestUrl) {
   const url = new URL(requestUrl, "http://127.0.0.1");
   const pathname = decodeURIComponent(url.pathname);
-  const relativePath = pathname === "/" ? "index.html" : pathname.slice(1);
+
+  let relativePath = null;
+  if (pathname === "/" || pathname === appBasePath) {
+    relativePath = "index.html";
+  } else if (pathname.startsWith(`${appBasePath}/`)) {
+    relativePath = pathname.slice(appBasePath.length + 1);
+  }
+
+  if (!relativePath) {
+    return null;
+  }
+
   const filePath = path.normalize(path.join(webDir, relativePath));
 
   if (!filePath.startsWith(webDir)) {

@@ -1,38 +1,45 @@
 const checks = [
   {
-    path: "/",
+    path: "",
     type: "text/html",
     includes: [
       "Web Video Compressor",
-      "/export-plan.js",
-      "/zip-download.js",
-      "/browser-adapter.js",
-      "/renderer.js"
+      "/web-video-compressor/styles.css",
+      "/web-video-compressor/export-plan.js",
+      "/web-video-compressor/zip-download.js",
+      "/web-video-compressor/browser-adapter.js",
+      "/web-video-compressor/renderer.js"
     ]
   },
-  { path: "/export-plan.js?v=verify", type: "javascript", includes: ["CompressorPlan"] },
-  { path: "/zip-download.js?v=verify", type: "javascript", includes: ["CompressorZip"] },
-  { path: "/browser-adapter.js?v=verify", type: "javascript", includes: ["window.compressor", "cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10"] },
-  { path: "/vendor/ffmpeg/ffmpeg/index.js", type: "javascript" },
-  { path: "/vendor/ffmpeg/ffmpeg/worker.js", type: "javascript" }
+  { path: "styles.css?v=verify", type: "text/css", includes: [".app-shell"] },
+  { path: "export-plan.js?v=verify", type: "javascript", includes: ["CompressorPlan"] },
+  { path: "zip-download.js?v=verify", type: "javascript", includes: ["CompressorZip"] },
+  { path: "browser-adapter.js?v=verify", type: "javascript", includes: ["window.compressor", "cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10"] },
+  { path: "vendor/ffmpeg/ffmpeg/index.js", type: "javascript" },
+  { path: "vendor/ffmpeg/ffmpeg/worker.js", type: "javascript" }
 ];
 
 function usage() {
-  console.error("Usage: node scripts/verify-web-url.js <origin>");
-  console.error("Example: node scripts/verify-web-url.js https://example.webflow.io");
+  console.error("Usage: node scripts/verify-web-url.js <app-url>");
+  console.error("Example: node scripts/verify-web-url.js https://example.webflow.io/web-video-compressor");
 }
 
-function normalizeOrigin(input) {
+function normalizeBaseUrl(input) {
   try {
     const url = new URL(input);
-    return url.origin;
+    url.search = "";
+    url.hash = "";
+    url.pathname = url.pathname.replace(/\/$/, "");
+    return url;
   } catch {
     return null;
   }
 }
 
-async function verifyUrl(origin, check) {
-  const url = new URL(check.path, origin);
+async function verifyUrl(baseUrl, check) {
+  const url = check.path === ""
+    ? new URL(baseUrl.href)
+    : new URL(`${baseUrl.pathname}/${check.path}`, baseUrl.origin);
   const response = await fetch(url, { cache: "no-store", redirect: "follow" });
   const contentType = response.headers.get("content-type") || "";
   const body = new Uint8Array(await response.arrayBuffer());
@@ -75,25 +82,25 @@ async function verifyUrl(origin, check) {
 }
 
 async function main() {
-  const origin = normalizeOrigin(process.argv[2] || "");
-  if (!origin) {
+  const baseUrl = normalizeBaseUrl(process.argv[2] || "");
+  if (!baseUrl) {
     usage();
     process.exit(1);
   }
 
   const results = [];
   for (const check of checks) {
-    results.push(await verifyUrl(origin, check));
+    results.push(await verifyUrl(baseUrl, check));
   }
 
-  const rootResponse = await fetch(origin, { cache: "no-store" });
+  const rootResponse = await fetch(baseUrl, { cache: "no-store" });
   const crossOriginOpenerPolicy = rootResponse.headers.get("cross-origin-opener-policy") || "";
   const crossOriginEmbedderPolicy = rootResponse.headers.get("cross-origin-embedder-policy") || "";
   const crossOriginIsolated = crossOriginOpenerPolicy.includes("same-origin")
     && crossOriginEmbedderPolicy.includes("require-corp");
 
   console.log(JSON.stringify({
-    origin,
+    appUrl: baseUrl.href,
     results,
     headers: {
       crossOriginOpenerPolicy,
