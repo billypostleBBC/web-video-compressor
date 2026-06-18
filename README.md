@@ -63,7 +63,9 @@ Verify the local static build and critical asset MIME types:
 npm run verify:web
 ```
 
-The verifier checks that the ffmpeg worker JavaScript and `ffmpeg-core.wasm` are present and served with usable content types. Production still needs the same check against the deployed Webflow Cloud URL before the browser path can be considered production-proven.
+The verifier checks that the app shell and local ffmpeg worker wrapper are present. The 31 MB `ffmpeg-core.wasm` file is intentionally not bundled into the Webflow Cloud deployment because Cloudflare Workers rejects it as an oversized asset during deploy. The browser adapter loads the pinned single-thread core from `https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm` when compression starts.
+
+This keeps source video processing local to the user's browser, but it means the web app now depends on that CDN being reachable to start encoding. Do not replace this with a backend encoder unless the product explicitly accepts uploading source videos.
 
 After deploying, verify the live URL:
 
@@ -71,7 +73,7 @@ After deploying, verify the live URL:
 npm run verify:web:url -- https://your-live-origin.example
 ```
 
-This checks the same critical files from the deployed origin and reports whether cross-origin isolation headers are present. The current single-thread wasm build does not require those headers, but they matter if the app later moves to a multi-thread ffmpeg.wasm build.
+This checks the same critical app files from the deployed origin and reports whether cross-origin isolation headers are present. The current single-thread wasm build does not require those headers, but they matter if the app later moves to a multi-thread ffmpeg.wasm build.
 
 Current Webflow Cloud docs describe deployments as GitHub-connected app builds with framework detection, and the bring-your-own-app guidance is centered on Next.js and Astro. This repo now uses Astro only as a static deployment wrapper; the compressor itself remains plain browser JavaScript and still does not use a backend encoder.
 
@@ -141,4 +143,4 @@ The browser ZIP download uses a store-only ZIP container. That keeps the feature
 
 The browser app warns before closing or reloading the tab while encoding is active or while completed outputs still exist only as page-local Blob download links.
 
-Before production deployment, Webflow Cloud still needs to prove that `.wasm` and worker assets are served with correct MIME types and headers from production URLs. The single-thread wasm build does not require `SharedArrayBuffer`, but the production proof should still confirm whether cross-origin isolation is available before considering a future multi-thread upgrade.
+Before production release, Webflow Cloud still needs a live browser compression test with a small representative video. The single-thread wasm core is loaded from a pinned CDN URL because Webflow Cloud currently rejects the wasm file as an oversized deployment asset. The production proof should still confirm whether cross-origin isolation is available before considering a future multi-thread upgrade.

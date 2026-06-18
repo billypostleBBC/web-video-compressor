@@ -13,9 +13,7 @@ const requiredFiles = [
   "renderer.js",
   "tauri-adapter.js",
   "vendor/ffmpeg/ffmpeg/index.js",
-  "vendor/ffmpeg/ffmpeg/worker.js",
-  "vendor/ffmpeg/core/ffmpeg-core.js",
-  "vendor/ffmpeg/core/ffmpeg-core.wasm"
+  "vendor/ffmpeg/ffmpeg/worker.js"
 ];
 
 fs.rmSync(output, { recursive: true, force: true });

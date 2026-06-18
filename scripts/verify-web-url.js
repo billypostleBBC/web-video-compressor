@@ -12,15 +12,9 @@ const checks = [
   },
   { path: "/export-plan.js?v=verify", type: "javascript", includes: ["CompressorPlan"] },
   { path: "/zip-download.js?v=verify", type: "javascript", includes: ["CompressorZip"] },
-  { path: "/browser-adapter.js?v=verify", type: "javascript", includes: ["window.compressor"] },
+  { path: "/browser-adapter.js?v=verify", type: "javascript", includes: ["window.compressor", "cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10"] },
   { path: "/vendor/ffmpeg/ffmpeg/index.js", type: "javascript" },
-  { path: "/vendor/ffmpeg/ffmpeg/worker.js", type: "javascript" },
-  { path: "/vendor/ffmpeg/core/ffmpeg-core.js", type: "javascript" },
-  {
-    path: "/vendor/ffmpeg/core/ffmpeg-core.wasm",
-    type: "application/wasm",
-    magicBytes: [0x00, 0x61, 0x73, 0x6d]
-  }
+  { path: "/vendor/ffmpeg/ffmpeg/worker.js", type: "javascript" }
 ];
 
 function usage() {
@@ -107,7 +101,8 @@ async function main() {
       crossOriginIsolated
     },
     notes: [
-      "The current single-thread ffmpeg.wasm build does not require SharedArrayBuffer.",
+      "The current single-thread ffmpeg.wasm core is loaded from a pinned CDN URL because Webflow Cloud rejects the 31 MB wasm file as an oversized asset.",
+      "The CDN-hosted encoder still runs in the user's browser; source videos are not uploaded to an encoder backend.",
       crossOriginIsolated
         ? "Cross-origin isolation headers are present, so a future multi-thread wasm build may be possible."
         : "Cross-origin isolation headers are not present; keep the single-thread wasm build unless hosting headers change."

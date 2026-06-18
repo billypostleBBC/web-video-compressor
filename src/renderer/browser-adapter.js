@@ -15,8 +15,10 @@
   let ffmpegLoading = null;
   let activeJob = null;
   let cancelled = false;
+  let ffmpegCoreBlobUrls = null;
   const largeFileWarningBytes = 500 * 1024 * 1024;
   const longDurationWarningSeconds = 10 * 60;
+  const ffmpegCoreBaseUrl = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
 
   function createFileRecord(file) {
     const id = `browser-file-${nextFileId}`;
@@ -258,6 +260,36 @@
     return null;
   }
 
+  async function createBlobUrlFromRemoteAsset(url, mimeType) {
+    const response = await fetch(url, { cache: "force-cache" });
+
+    if (!response.ok) {
+      throw new Error(`Could not load browser encoder asset ${url}. Check your connection and try again.`);
+    }
+
+    const blob = new Blob([await response.arrayBuffer()], { type: mimeType });
+    return URL.createObjectURL(blob);
+  }
+
+  async function ffmpegCoreUrls() {
+    if (ffmpegCoreBlobUrls) {
+      return ffmpegCoreBlobUrls;
+    }
+
+    ffmpegCoreBlobUrls = {
+      coreURL: await createBlobUrlFromRemoteAsset(
+        `${ffmpegCoreBaseUrl}/ffmpeg-core.js`,
+        "application/javascript"
+      ),
+      wasmURL: await createBlobUrlFromRemoteAsset(
+        `${ffmpegCoreBaseUrl}/ffmpeg-core.wasm`,
+        "application/wasm"
+      )
+    };
+
+    return ffmpegCoreBlobUrls;
+  }
+
   async function createFfmpeg() {
     if (ffmpegLoading) {
       return ffmpegLoading;
@@ -271,6 +303,7 @@
 
       const { FFmpeg } = await import("./vendor/ffmpeg/ffmpeg/index.js");
       const instance = new FFmpeg();
+      const coreUrls = await ffmpegCoreUrls();
       ffmpeg = instance;
 
       instance.on("progress", ({ progress }) => {
@@ -286,10 +319,7 @@
         });
       });
 
-      await instance.load({
-        coreURL: new window.URL("./vendor/ffmpeg/core/ffmpeg-core.js", document.baseURI).href,
-        wasmURL: new window.URL("./vendor/ffmpeg/core/ffmpeg-core.wasm", document.baseURI).href
-      });
+      await instance.load(coreUrls);
 
       ffmpeg = instance;
       return instance;

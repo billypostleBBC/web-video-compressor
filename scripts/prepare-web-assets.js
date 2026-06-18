@@ -16,10 +16,6 @@ const copies = [
   {
     from: path.join(root, "node_modules/@ffmpeg/ffmpeg/dist/esm"),
     to: path.join(publicDir, "vendor/ffmpeg/ffmpeg")
-  },
-  {
-    from: path.join(root, "node_modules/@ffmpeg/core/dist/esm"),
-    to: path.join(publicDir, "vendor/ffmpeg/core")
   }
 ];
 

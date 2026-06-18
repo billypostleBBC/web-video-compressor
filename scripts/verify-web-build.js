@@ -20,13 +20,7 @@ const checks = [
   { path: "/zip-download.js?v=verify", type: "javascript", includes: ["CompressorZip"] },
   { path: "/browser-adapter.js?v=verify", type: "javascript", includes: ["window.compressor"] },
   { path: "/vendor/ffmpeg/ffmpeg/index.js", type: "javascript" },
-  { path: "/vendor/ffmpeg/ffmpeg/worker.js", type: "javascript" },
-  { path: "/vendor/ffmpeg/core/ffmpeg-core.js", type: "javascript" },
-  {
-    path: "/vendor/ffmpeg/core/ffmpeg-core.wasm",
-    type: "application/wasm",
-    magicBytes: [0x00, 0x61, 0x73, 0x6d]
-  }
+  { path: "/vendor/ffmpeg/ffmpeg/worker.js", type: "javascript" }
 ];
 const mimeTypes = {
   ".html": "text/html; charset=UTF-8",
@@ -125,8 +119,11 @@ async function verifyUrl(origin, check) {
 
 async function main() {
   assertFile("index.html");
-  assertFile("vendor/ffmpeg/core/ffmpeg-core.wasm");
   assertFile("vendor/ffmpeg/ffmpeg/worker.js");
+
+  if (fs.existsSync(path.join(webDir, "vendor/ffmpeg/core/ffmpeg-core.wasm"))) {
+    throw new Error("Build output includes ffmpeg-core.wasm, which is too large for Webflow Cloud assets.");
+  }
 
   const { origin, server } = await createStaticServer();
 
