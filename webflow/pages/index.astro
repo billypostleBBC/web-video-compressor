@@ -1,6 +1,7 @@
 ---
 const cacheVersion = "webflow-3";
-const assetPath = (filename) => `./${filename}?v=${cacheVersion}`;
+const appBasePath = "/web-video-compressor";
+const assetPath = (filename) => `${appBasePath}/${filename}?v=${cacheVersion}`;
 ---
 
 <!doctype html>
