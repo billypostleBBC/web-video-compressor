@@ -23,7 +23,8 @@ childProcess.execFileSync("npx", ["astro", "build"], {
   cwd: root,
   env: {
     ...process.env,
-    ASTRO_TELEMETRY_DISABLED: "1"
+    ASTRO_TELEMETRY_DISABLED: "1",
+    WEB_VIDEO_COMPRESSOR_OUT_DIR: "dist/web"
   },
   stdio: "inherit"
 });

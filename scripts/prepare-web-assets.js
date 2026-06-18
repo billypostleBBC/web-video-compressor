@@ -23,18 +23,26 @@ const copies = [
   }
 ];
 
-fs.rmSync(publicDir, { recursive: true, force: true });
-fs.mkdirSync(publicDir, { recursive: true });
+function prepareWebAssets() {
+  fs.rmSync(publicDir, { recursive: true, force: true });
+  fs.mkdirSync(publicDir, { recursive: true });
 
-for (const relativePath of publicFiles) {
-  fs.copyFileSync(
-    path.join(renderer, relativePath),
-    path.join(publicDir, relativePath)
-  );
+  for (const relativePath of publicFiles) {
+    fs.copyFileSync(
+      path.join(renderer, relativePath),
+      path.join(publicDir, relativePath)
+    );
+  }
+
+  for (const copy of copies) {
+    fs.rmSync(copy.to, { recursive: true, force: true });
+    fs.mkdirSync(copy.to, { recursive: true });
+    fs.cpSync(copy.from, copy.to, { recursive: true });
+  }
 }
 
-for (const copy of copies) {
-  fs.rmSync(copy.to, { recursive: true, force: true });
-  fs.mkdirSync(copy.to, { recursive: true });
-  fs.cpSync(copy.from, copy.to, { recursive: true });
+if (require.main === module) {
+  prepareWebAssets();
 }
+
+module.exports = { prepareWebAssets };

@@ -51,9 +51,11 @@ npm run build:web
 
 The output is written to `dist/web`. The build uses a minimal Astro wrapper because Webflow Cloud's BYO app path is framework-oriented. For Webflow Cloud, use:
 
-- Build command: `npm run build:web`
-- Publish directory: `dist/web`
+- Build command: `npm run build`
+- Output directory: leave Webflow Cloud's Astro default in place
 - Node: `22.x`
+
+Webflow Cloud rewrites Astro projects for Cloudflare deployment and expects the worker entrypoint in Astro's default `dist` layout. The local `build:web` command intentionally keeps writing to `dist/web` so the static build can be verified without Webflow's deployment wrapper.
 
 Verify the local static build and critical asset MIME types:
 
