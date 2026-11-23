@@ -1,5 +1,5 @@
 ---
-const cacheVersion = "swcr-design-2";
+const cacheVersion = "swcr-design-3";
 const appBasePath = "/web-video-compressor";
 const assetPath = (filename) => `${appBasePath}/${filename}?v=${cacheVersion}`;
 ---
@@ -20,6 +20,7 @@ const assetPath = (filename) => `${appBasePath}/${filename}?v=${cacheVersion}`;
           <header class="intro">
             <h1 id="compressor-title">Web video compressor</h1>
             <p>Prepare videos for custom builds into industry standard responsive web sizes, using web-appropriate compression for efficient file sizes. Outputs include MP4 and WEBM video files, plus an automatically captured poster image.</p>
+            <p class="privacy-note">MOV or MP4. Videos stay on your device. Keep this tab open while compressing.</p>
           </header>
           <section aria-labelledby="source-heading">
             <h2 id="source-heading">Upload video</h2>
@@ -35,7 +36,6 @@ const assetPath = (filename) => `${appBasePath}/${filename}?v=${cacheVersion}`;
               <button id="resetButton" type="button" class="text-button" disabled>Reset</button>
               <button id="downloadZipButton" type="button" hidden disabled>Download ZIP</button>
             </div>
-            <p class="privacy-note">MOV or MP4. Videos stay on your device. Keep this tab open while compressing.</p>
           </section>
         </div>
         <div class="output-column">
