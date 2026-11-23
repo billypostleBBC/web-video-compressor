@@ -16,6 +16,7 @@
   let activeJob = null;
   let activeNativeAbort = null;
   let cancelled = false;
+  let activeQueue = null;
   let ffmpegCoreBlobUrls = null;
   const largeFileWarningBytes = 500 * 1024 * 1024;
   const longDurationWarningSeconds = 10 * 60;
@@ -695,7 +696,7 @@
     }
   }
 
-  async function startBrowserEncoding({ selection, qualityKey }) {
+  async function startBrowserEncoding({ selection, qualityKey, skippedIds = [] }) {
     const supportError = browserSupportError();
     if (supportError) {
       return {
@@ -715,6 +716,7 @@
     }
 
     cancelled = false;
+    activeQueue = plan.createBrowserQueue(records, skippedIds);
 
     try {
       emit({
@@ -723,23 +725,15 @@
         totalJobs: records.length * plan.EXPORT_DEFINITIONS.length
       });
 
-      for (const record of records) {
-        if (cancelled) {
-          throw new DOMException("Encoding cancelled.", "AbortError");
+      while (true) {
+        if (cancelled) throw new DOMException("Encoding cancelled.", "AbortError");
+        const job = activeQueue.takeNext();
+        if (!job) break;
+        await runJob(job.record, job.exportDefinition, qualityKey);
+        activeQueue.finish(job.id);
+        if (!activeQueue.jobs.some(other => other.record.id === job.record.id && ["waiting", "active"].includes(other.status))) {
+          emit({type:"file-finished", inputPath:job.record.id});
         }
-
-        for (const exportDefinition of plan.EXPORT_DEFINITIONS) {
-          if (cancelled) {
-            throw new DOMException("Encoding cancelled.", "AbortError");
-          }
-
-          await runJob(record, exportDefinition, qualityKey);
-        }
-
-        emit({
-          type: "file-finished",
-          inputPath: record.id
-        });
       }
 
       activeJob = null;
@@ -778,6 +772,8 @@
         cancelled: false,
         message
       };
+    } finally {
+      activeQueue = null;
     }
   }
 
@@ -845,6 +841,7 @@
       };
     },
     releaseSelection,
+    setJobSkipped: ({ id, skipped }) => Boolean(activeQueue?.setSkipped(id, skipped)),
     start: startBrowserEncoding,
     cancel: async () => {
       cancelled = true;

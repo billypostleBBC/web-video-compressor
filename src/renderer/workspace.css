@@ -44,7 +44,9 @@ button:disabled{opacity:.45;cursor:default}
 .button-row{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-top:16px}
 .source-actions{min-height:40px}
 .privacy-note{font-size:12px;color:#808080}
-.output-actions{justify-content:flex-end}
+.output-actions{justify-content:space-between}
+.output-actions .is-start{margin-left:auto}
+.output-actions .is-start + button{margin-left:0}
 .compression-card{display:grid;gap:8px}
 .quality-ticks{display:flex;justify-content:space-between;font-size:16px;line-height:1.5}
 .quality-tick--active{font-weight:700}
@@ -84,3 +86,13 @@ button{min-height:44px}
 
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;scroll-behavior:auto!important}
 }
+
+.queue-status.queue-skip{display:grid;place-items:center;flex:none;min-height:32px;min-width:60px;padding:2px 0;border:0;background:none;color:var(--muted);font-size:14px;font-weight:300;line-height:1.5;text-align:right}
+.queue-skip-label,.queue-skip-action{grid-area:1 / 1;justify-self:end}
+.queue-skip-action{visibility:hidden;color:white;text-decoration:underline;text-underline-offset:3px}
+.queue-skip:hover .queue-skip-label,.queue-skip:focus-visible .queue-skip-label{visibility:hidden}
+.queue-skip:hover .queue-skip-action,.queue-skip:focus-visible .queue-skip-action{visibility:visible}
+.queue-item--skipped .queue-item__title,.queue-item--skipped .queue-progress{opacity:.4}
+@media(pointer:coarse){.queue-status.queue-skip{min-height:44px}.queue-skip-label{visibility:hidden}.queue-skip-action{visibility:visible}}
+
+.queue-status.queue-skip:hover:not(:disabled){background:none}

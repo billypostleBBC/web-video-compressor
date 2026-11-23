@@ -22,6 +22,7 @@ const state = {
   outputRows: [],
   selectionGuidance: [],
   running: false,
+  zipPreparing: false,
   toolsOk: false,
   dragDepth: 0,
   activeSection: "source",
@@ -236,6 +237,7 @@ function setToolStatus(result) {
 }
 
 function renderQueue() {
+  const focusedSkipId = elements.queueList.contains(document.activeElement) ? document.activeElement.dataset.skipId : null;
   elements.queueList.innerHTML = "";
   const now = window.performance.now();
 
@@ -275,9 +277,26 @@ function renderQueue() {
       name.append(link);
     }
 
-    const status = document.createElement("span");
+    const canSkip = typeof compressorApi()?.setJobSkipped === "function"
+      && ["waiting", "skipped"].includes(row.status);
+    const status = document.createElement(canSkip ? "button" : "span");
     status.className = "queue-status";
-    status.textContent = statusLabel(row.status);
+    if (canSkip) {
+      status.type = "button";
+      status.classList.add("queue-skip");
+      status.dataset.skipId = row.id;
+      status.setAttribute("aria-pressed", String(Boolean(row.skipped)));
+      status.setAttribute("aria-label", `${row.skipped ? "Restore" : "Skip"} ${row.label}`);
+      const label = document.createElement("span");
+      label.className = "queue-skip-label";
+      label.textContent = row.skipped ? "Skipped" : "Waiting";
+      const action = document.createElement("span");
+      action.className = "queue-skip-action";
+      action.textContent = row.skipped ? "Restore" : "Skip";
+      status.append(label, action);
+    } else {
+      status.textContent = statusLabel(row.status);
+    }
 
     const progressTrack = document.createElement("div");
     progressTrack.className = "queue-progress";
@@ -297,6 +316,10 @@ function renderQueue() {
     elements.queueList.append(item);
   }
 
+  if (focusedSkipId) {
+    [...elements.queueList.querySelectorAll("[data-skip-id]")]
+      .find(button => button.dataset.skipId === focusedSkipId)?.focus({preventScroll:true});
+  }
   updateSubtitles();
   scheduleWindowResize();
   scheduleProgressAnimation();
@@ -382,7 +405,7 @@ function clearRowDownload(row) {
 }
 
 function resetRowForNewRun(row) {
-  row.status = "waiting";
+  row.status = row.skipped ? "skipped" : "waiting";
   row.progress = 0;
   row.startedAt = null;
   clearRowCompletion(row);
@@ -473,15 +496,17 @@ function updateControls() {
 
   elements.outputActionButton.textContent = actionState.label;
   elements.outputActionButton.disabled = actionState.disabled || (!canStart && actionState.kind === "start");
-  elements.outputActionButton.classList.toggle("secondary", actionState.kind === "stop");
+  elements.outputActionButton.classList.toggle("secondary", actionState.kind !== "start");
+  elements.outputActionButton.classList.toggle("is-start", actionState.kind === "start");
+  if (state.zipPreparing && actionState.kind !== "stop") elements.outputActionButton.disabled = true;
   const zipRows = completedDownloadRows();
-  elements.downloadZipButton.hidden = zipRows.length === 0;
-  elements.downloadZipButton.disabled = state.running || zipRows.length === 0 || !zipApi();
+  elements.downloadZipButton.hidden = !document.body.classList.contains("web-workspace") && zipRows.length === 0;
+  elements.downloadZipButton.disabled = state.zipPreparing || zipRows.length === 0 || !zipApi();
   elements.downloadZipButton.textContent = zipRows.length > 0
     ? `Download ZIP (${zipRows.length})`
     : "Download ZIP";
-  elements.selectFileButton.disabled = state.running;
-  elements.resetButton.disabled = state.running || !state.selection;
+  elements.selectFileButton.disabled = state.running || state.zipPreparing;
+  elements.resetButton.disabled = state.running || state.zipPreparing || !state.selection;
   elements.resetButton.hidden = !state.selection;
   elements.qualitySlider.disabled = state.running;
   elements.qualitySlider.setAttribute("aria-valuetext", qualityPreset(currentQualityKey()).label);
@@ -516,7 +541,7 @@ function outputActionState() {
   return {
     kind: "start",
     label: "Start compression",
-    disabled: !state.toolsOk || state.videos.length === 0
+    disabled: !state.toolsOk || state.videos.length === 0 || state.outputRows.every(row => row.skipped)
   };
 }
 
@@ -591,6 +616,10 @@ async function loadSelection(selection) {
   state.outputDir = preview.outputDir;
   state.selectionGuidance = Array.isArray(preview.guidance) ? preview.guidance : [];
   state.outputRows = createOutputRows(preview.videos);
+  if (typeof api.setJobSkipped === "function") {
+    const order = new Map(window.CompressorPlan.createBrowserQueue(preview.videos).jobs.map((job, index) => [job.id, index]));
+    state.outputRows.sort((a, b) => order.get(a.id) - order.get(b.id));
+  }
   state.runState = "idle";
 
   elements.selectionText.textContent = selectionLabel(selection);
@@ -621,6 +650,7 @@ function canAcceptDrop(event) {
   return Boolean(
     compressorApi()
       && !state.running
+      && !state.zipPreparing
       && (!event
         || (event.dataTransfer
           && event.dataTransfer.types
@@ -705,7 +735,11 @@ function updateOutputRow(event, updates) {
 function markIncompleteRows(status) {
   clearCompletionTimers();
   for (const row of state.outputRows) {
-    if (row.status !== "done") {
+    if (row.downloadUrl) {
+      row.status = "done";
+      row.progress = 1;
+      clearRowCompletion(row);
+    } else if (row.status !== "done" && !row.skipped) {
       row.status = status;
       row.progress = status === "waiting" ? 0 : row.progress;
       row.startedAt = null;
@@ -761,13 +795,15 @@ async function downloadCompletedZip() {
   const zip = zipApi();
   const rows = completedDownloadRows();
 
-  if (!zip || rows.length === 0) {
+  if (!zip || rows.length === 0 || state.zipPreparing) {
     return;
   }
 
   const previousSummary = elements.summaryText.textContent;
-  elements.downloadZipButton.disabled = true;
-  elements.summaryText.textContent = `Preparing ZIP from ${rows.length} completed output${rows.length === 1 ? "" : "s"}...`;
+  const preparingMessage = `Preparing ZIP from ${rows.length} completed output${rows.length === 1 ? "" : "s"}...`;
+  state.zipPreparing = true;
+  updateControls();
+  elements.summaryText.textContent = preparingMessage;
 
   try {
     const usedNames = new Set();
@@ -794,10 +830,14 @@ async function downloadCompletedZip() {
     link.click();
     link.remove();
     window.setTimeout(() => window.URL.revokeObjectURL(url), 5000);
-    elements.summaryText.textContent = `${previousSummary} ZIP download prepared.`;
+    if (!state.running) {
+      const summary = elements.summaryText.textContent === preparingMessage ? previousSummary : elements.summaryText.textContent;
+      elements.summaryText.textContent = `${summary} ZIP download prepared.`;
+    }
   } catch (error) {
     elements.summaryText.textContent = `ZIP download failed. ${error.message}`;
   } finally {
+    state.zipPreparing = false;
     updateControls();
   }
 }
@@ -901,12 +941,13 @@ function finishOutputRow(event) {
     minimumJobProgressAnimationMs - (window.performance.now() - startedAt)
   );
 
-  if (remainingMs === 0) {
+  if (remainingMs === 0 || document.body.classList.contains("web-workspace")) {
     row.progress = 1;
     row.status = "done";
     row.startedAt = null;
     clearRowCompletion(row);
     renderQueue();
+    updateControls();
     return;
   }
 
@@ -938,7 +979,7 @@ function finishOutputRow(event) {
 
 async function startCompression() {
   const api = compressorApi();
-  if (!api || state.running) {
+  if (!api || state.running || state.zipPreparing || state.outputRows.every(row => row.skipped)) {
     return;
   }
 
@@ -951,7 +992,8 @@ async function startCompression() {
 
   const result = await api.start({
     selection: state.selection,
-    qualityKey: currentQualityKey()
+    qualityKey: currentQualityKey(),
+    skippedIds: state.outputRows.filter(row => row.skipped).map(row => row.id)
   });
 
   if (!result.ok) {
@@ -984,6 +1026,18 @@ async function init() {
     });
   }
 
+  elements.queueList.addEventListener("click", event => {
+    const button = event.target.closest("[data-skip-id]");
+    if (!button) return;
+    const row = state.outputRows.find(row => row.id === button.dataset.skipId);
+    if (!row || !["waiting", "skipped"].includes(row.status)) return;
+    const skipped = !row.skipped;
+    if (state.running && !compressorApi().setJobSkipped({id:row.id, skipped})) return;
+    row.skipped = skipped;
+    row.status = skipped ? "skipped" : "waiting";
+    renderQueue();
+    updateControls();
+  });
   elements.qualitySlider.addEventListener("input", updateQualityText);
   elements.resetButton.addEventListener("click", resetSelection);
   elements.downloadZipButton.addEventListener("click", downloadCompletedZip);

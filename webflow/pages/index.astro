@@ -1,5 +1,5 @@
 ---
-const cacheVersion = "swcr-design-3";
+const cacheVersion = "swcr-queue-1";
 const appBasePath = "/web-video-compressor";
 const assetPath = (filename) => `${appBasePath}/${filename}?v=${cacheVersion}`;
 ---
@@ -34,7 +34,6 @@ const assetPath = (filename) => `${appBasePath}/${filename}?v=${cacheVersion}`;
             </div>
             <div class="button-row source-actions">
               <button id="resetButton" type="button" class="text-button" disabled>Reset</button>
-              <button id="downloadZipButton" type="button" hidden disabled>Download ZIP</button>
             </div>
           </section>
         </div>
@@ -54,6 +53,7 @@ const assetPath = (filename) => `${appBasePath}/${filename}?v=${cacheVersion}`;
             <div id="queueList" class="queue-list"><p class="muted">Choose a video to see its outputs.</p></div>
             <div id="runActions" class="button-row output-actions">
               <button id="outputActionButton" type="button" disabled>Start compression</button>
+              <button id="downloadZipButton" type="button" disabled>Download ZIP</button>
             </div>
           </section>
         </div>

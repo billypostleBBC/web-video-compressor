@@ -244,6 +244,37 @@
     );
   }
 
+  // Browser jobs prioritise primary assets across the entire selection.
+  // The desktop export contract remains unchanged.
+  function createBrowserQueue(videos, skippedIds = []) {
+    const skipped = new Set(skippedIds);
+    const jobs = ["mp4", "webm", "poster"].flatMap(kind =>
+      videos.flatMap(record => EXPORT_DEFINITIONS.filter(def => def.kind === kind).map(exportDefinition => {
+        const id = buildRowId(record, exportDefinition.jobLabel);
+        return { id, record, exportDefinition, status: skipped.has(id) ? "skipped" : "waiting" };
+      }))
+    );
+    return {
+      jobs,
+      takeNext() {
+        const job = jobs.find(job => job.status === "waiting");
+        if (!job) return null;
+        job.status = "active";
+        return job;
+      },
+      finish(id) {
+        const job = jobs.find(job => job.id === id);
+        if (job?.status === "active") job.status = "done";
+      },
+      setSkipped(id, skip) {
+        const job = jobs.find(job => job.id === id);
+        if (!job || !["waiting", "skipped"].includes(job.status)) return false;
+        job.status = skip ? "skipped" : "waiting";
+        return true;
+      }
+    };
+  }
+
   function isSupportedVideoFile(filePath) {
     const name = typeof filePath === "string"
       ? filePath
@@ -264,6 +295,7 @@
     buildFfmpegArgs,
     buildPosterFallbackArgs,
     createOutputRows,
+    createBrowserQueue,
     fileName,
     isSupportedVideoFile,
     outputFileName,

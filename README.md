@@ -144,3 +144,12 @@ The browser ZIP download uses a store-only ZIP container. That keeps the feature
 The browser app warns before closing or reloading the tab while encoding is active or while completed outputs still exist only as page-local Blob download links.
 
 Before production release, Webflow Cloud still needs a live browser compression test with a small representative video. The single-thread wasm core is loaded from a pinned CDN URL because Webflow Cloud currently rejects the wasm file as an oversized deployment asset. The production proof should still confirm whether cross-origin isolation is available before considering a future multi-thread upgrade.
+
+
+## Browser queue and downloads
+
+The hosted app runs all MP4 sizes across the selection first, then WebMs, then poster JPGs. Desktop export ordering is unchanged.
+
+Hover or keyboard-focus a Waiting label to reveal Skip. Skipped rows are dimmed and can be restored; touch devices show the action directly. Only pending outputs can be skipped. Exclusions persist when restarting and reset with a new selection.
+
+Download ZIP stays below the queue and becomes available as soon as an output completes, including during a run and after Stop or failure. It contains the completed outputs available when clicked. Individual completed filenames are also download links. Restart is a secondary action below the queue and starts the selected outputs again; download completed work before restarting or resetting.
