@@ -1,9 +1,8 @@
 ---
-const cacheVersion = "webflow-4";
+const cacheVersion = "swcr-design-1";
 const appBasePath = "/web-video-compressor";
 const assetPath = (filename) => `${appBasePath}/${filename}?v=${cacheVersion}`;
 ---
-
 <!doctype html>
 <html lang="en">
   <head>
@@ -11,97 +10,56 @@ const assetPath = (filename) => `${appBasePath}/${filename}?v=${cacheVersion}`;
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Web Video Compressor</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href={assetPath("styles.css")} />
+    <link rel="stylesheet" href={assetPath("workspace.css")} />
   </head>
-  <body>
-    <div class="window-drag-region" data-tauri-drag-region aria-hidden="true"></div>
-    <div class="app-title" data-tauri-drag-region>Web Video Compressor</div>
-    <main class="app-shell">
+  <body class="web-workspace">
+    <main class="app-shell" aria-labelledby="compressor-title">
       <div id="toolStatus" class="tool-alert" role="alert" hidden></div>
-
-      <div class="accordion" aria-label="Compression workflow">
-        <section class="accordion-section accordion-section--open accordion-section--chevron-open" data-section="source">
-          <button
-            id="sourceToggle"
-            class="accordion-toggle"
-            type="button"
-            aria-expanded="true"
-            aria-controls="sourcePanel"
-          >
-            <span class="accordion-title">Source</span>
-            <span id="sourceSubtitle" class="accordion-subtitle">No files selected</span>
-            <span class="accordion-chevron" aria-hidden="true"></span>
-          </button>
-          <div id="sourcePanel" class="accordion-panel">
+      <div class="workspace-grid">
+        <div class="source-column">
+          <header class="intro">
+            <h1 id="compressor-title">Web video compressor</h1>
+            <p>Prepare videos for custom builds into industry standard responsive web sizes, using web-appropriate compression for efficient file sizes. Outputs include MP4 and WEBM video files, plus an automatically captured poster image.</p>
+          </header>
+          <section aria-labelledby="source-heading">
+            <h2 id="source-heading">Upload video</h2>
             <div id="dropZone" class="source-drop" aria-label="Drop .mov or .mp4 video files">
-              <p class="source-drop__heading">Drag and drop .mov or .mp4 files anywhere in this area</p>
-              <p class="source-drop__copy">or click the button below to browse your computer</p>
+              <p class="source-drop__heading">Drag &amp; drop to upload</p>
+              <button id="selectFileButton" type="button" class="file-picker">Choose file</button>
               <div id="sourceSelection" class="source-selection" hidden></div>
               <p id="sourceGuidance" class="source-guidance" hidden></p>
-              <div class="button-row source-actions">
-                <button id="selectFileButton" type="button" class="primary">Choose file</button>
-                <button id="resetButton" type="button" class="secondary" hidden disabled>Reset</button>
-              </div>
               <span id="selectionText" class="sr-only">No source selected</span>
               <span id="outputText" class="sr-only"></span>
             </div>
-          </div>
-        </section>
-
-        <section class="accordion-section" data-section="compression">
-          <button
-            id="compressionToggle"
-            class="accordion-toggle"
-            type="button"
-            aria-expanded="false"
-            aria-controls="compressionPanel"
-          >
-            <span class="accordion-title">Compression</span>
-            <span id="compressionSubtitle" class="accordion-subtitle">Medium</span>
-            <span class="accordion-chevron" aria-hidden="true"></span>
-          </button>
-          <div id="compressionPanel" class="accordion-panel" hidden>
+            <div class="button-row source-actions">
+              <button id="resetButton" type="button" class="text-button" disabled>Reset</button>
+              <button id="downloadZipButton" type="button" hidden disabled>Download ZIP</button>
+            </div>
+            <p class="privacy-note">MOV or MP4. Videos stay on your device. Keep this tab open while compressing.</p>
+          </section>
+        </div>
+        <div class="output-column">
+          <section aria-labelledby="quality-heading">
+            <h2 id="quality-heading">Video quality</h2>
             <div class="compression-card">
-              <div class="quality-ticks">
-                <span>Low</span>
-                <span class="quality-tick--active">Medium</span>
-                <span>High</span>
-              </div>
-              <input id="qualitySlider" type="range" min="0" max="2" step="1" value="1" />
+              <div class="quality-ticks" aria-hidden="true"><span>low</span><span class="quality-tick--active">medium</span><span>high</span></div>
+              <input id="qualitySlider" type="range" min="0" max="2" step="1" value="1" aria-label="Video quality" aria-describedby="qualityDescription" />
               <p id="qualityDescription" class="quality-description">Default, for balanced quality and size</p>
+              <span id="qualityLabel" class="sr-only">Medium</span>
             </div>
-            <span id="qualityLabel" class="sr-only">Medium</span>
-          </div>
-        </section>
-
-        <section class="accordion-section" data-section="output">
-          <button
-            id="outputToggle"
-            class="accordion-toggle"
-            type="button"
-            aria-expanded="false"
-            aria-controls="outputPanel"
-          >
-            <span class="accordion-title">Output</span>
-            <span id="outputSubtitle" class="accordion-subtitle">0 outputs</span>
-            <span class="accordion-chevron" aria-hidden="true"></span>
-          </button>
-          <div id="outputPanel" class="accordion-panel" hidden>
-            <div class="output-card">
-              <p id="summaryText" class="muted output-summary">No videos queued.</p>
-              <div id="queueList" class="queue-list">
-                <p class="muted">No outputs queued.</p>
-              </div>
-              <div id="runActions" class="button-row output-actions">
-                <button id="downloadZipButton" type="button" class="secondary" hidden disabled>Download ZIP</button>
-                <button id="outputActionButton" type="button" disabled>Start compression</button>
-              </div>
+          </section>
+          <section aria-labelledby="output-heading">
+            <h2 id="output-heading">Compressing video</h2>
+            <p id="summaryText" class="muted output-summary" role="status" aria-live="polite">No videos queued.</p>
+            <div id="queueList" class="queue-list"><p class="muted">Choose a video to see its outputs.</p></div>
+            <div id="runActions" class="button-row output-actions">
+              <button id="outputActionButton" type="button" disabled>Start compression</button>
             </div>
-          </div>
-        </section>
+          </section>
+        </div>
       </div>
+      <span id="sourceSubtitle" hidden></span><span id="compressionSubtitle" hidden></span><span id="outputSubtitle" hidden></span>
     </main>
-
     <script src={assetPath("export-plan.js")}></script>
     <script src={assetPath("zip-download.js")}></script>
     <script src={assetPath("tauri-adapter.js")}></script>

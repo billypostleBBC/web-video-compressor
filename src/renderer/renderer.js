@@ -168,6 +168,9 @@ function scheduleSection(section, callback, delay) {
 function openSection(sectionName) {
   state.activeSection = sectionName;
 
+  // The web workspace keeps all stages visible; the desktop app retains its accordion.
+  if (document.body.classList.contains("web-workspace")) return;
+
   for (const section of elements.sections) {
     const isOpen = section.dataset.section === sectionName;
     const toggle = section.querySelector(".accordion-toggle");
@@ -279,6 +282,7 @@ function renderQueue() {
     const progressTrack = document.createElement("div");
     progressTrack.className = "queue-progress";
     progressTrack.setAttribute("role", "progressbar");
+    progressTrack.setAttribute("aria-label", row.label);
     progressTrack.setAttribute("aria-valuemin", "0");
     progressTrack.setAttribute("aria-valuemax", "100");
     progressTrack.setAttribute("aria-valuenow", String(Math.round(displayedProgress(row, now) * 100)));
@@ -480,6 +484,7 @@ function updateControls() {
   elements.resetButton.disabled = state.running || !state.selection;
   elements.resetButton.hidden = !state.selection;
   elements.qualitySlider.disabled = state.running;
+  elements.qualitySlider.setAttribute("aria-valuetext", qualityPreset(currentQualityKey()).label);
   updateSubtitles();
 }
 
@@ -535,10 +540,11 @@ function updateQualityText() {
   const value = Number(elements.qualitySlider.value);
   const preset = qualityPreset(key);
   elements.qualityLabel.textContent = preset.label;
+  elements.qualitySlider.setAttribute("aria-valuetext", preset.label);
   elements.qualityDescription.textContent = preset.description;
   elements.qualitySlider.style.setProperty("--quality-percent", `${value * 50}%`);
   for (const tick of document.querySelectorAll(".quality-ticks span")) {
-    tick.classList.toggle("quality-tick--active", tick.textContent === preset.label);
+    tick.classList.toggle("quality-tick--active", tick.textContent.toLowerCase() === preset.label.toLowerCase());
   }
   updateSubtitles();
 }

@@ -6,6 +6,7 @@ const renderer = path.join(root, "src/renderer");
 const publicDir = path.join(root, "public");
 const publicFiles = [
   "styles.css",
+  "workspace.css",
   "export-plan.js",
   "zip-download.js",
   "browser-adapter.js",
@@ -29,6 +30,8 @@ function prepareWebAssets() {
       path.join(publicDir, relativePath)
     );
   }
+
+  fs.cpSync(path.join(renderer, "assets"), path.join(publicDir, "assets"), { recursive: true });
 
   for (const copy of copies) {
     fs.rmSync(copy.to, { recursive: true, force: true });

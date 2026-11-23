@@ -7,6 +7,9 @@ const output = path.join(root, "dist/web");
 const requiredFiles = [
   "index.html",
   "styles.css",
+  "workspace.css",
+  "assets/check-circle.svg",
+  "assets/quality-thumb.svg",
   "export-plan.js",
   "zip-download.js",
   "browser-adapter.js",

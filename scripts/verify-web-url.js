@@ -4,14 +4,14 @@ const checks = [
     type: "text/html",
     includes: [
       "Web Video Compressor",
-      "/web-video-compressor/styles.css",
+      "/web-video-compressor/workspace.css",
       "/web-video-compressor/export-plan.js",
       "/web-video-compressor/zip-download.js",
       "/web-video-compressor/browser-adapter.js",
       "/web-video-compressor/renderer.js"
     ]
   },
-  { path: "styles.css?v=verify", type: "text/css", includes: [".app-shell"] },
+  { path: "workspace.css?v=verify", type: "text/css", includes: [".app-shell"] },
   { path: "export-plan.js?v=verify", type: "javascript", includes: ["CompressorPlan"] },
   { path: "zip-download.js?v=verify", type: "javascript", includes: ["CompressorZip"] },
   { path: "browser-adapter.js?v=verify", type: "javascript", includes: ["window.compressor", "cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10"] },

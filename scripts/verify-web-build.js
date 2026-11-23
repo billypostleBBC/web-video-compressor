@@ -11,14 +11,14 @@ const checks = [
     type: "text/html",
     includes: [
       "Web Video Compressor",
-      `${appBasePath}/styles.css`,
+      `${appBasePath}/workspace.css`,
       `${appBasePath}/export-plan.js`,
       `${appBasePath}/zip-download.js`,
       `${appBasePath}/browser-adapter.js`,
       `${appBasePath}/renderer.js`
     ]
   },
-  { path: `${appBasePath}/styles.css?v=verify`, type: "text/css", includes: [".app-shell"] },
+  { path: `${appBasePath}/workspace.css?v=verify`, type: "text/css", includes: [".app-shell"] },
   { path: `${appBasePath}/export-plan.js?v=verify`, type: "javascript", includes: ["CompressorPlan"] },
   { path: `${appBasePath}/zip-download.js?v=verify`, type: "javascript", includes: ["CompressorZip"] },
   { path: `${appBasePath}/browser-adapter.js?v=verify`, type: "javascript", includes: ["window.compressor"] },
